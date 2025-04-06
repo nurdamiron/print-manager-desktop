@@ -36,14 +36,12 @@
       }
     ],
     "win": {
-      "target": [
-        "nsis"
-      ]
+      "target": ["portable"]
+
     },
     "mac": {
-      "target": [
-        "dmg"
-      ]
+      "target": ["dmg"]
+
     },
     "linux": {
       "target": [
