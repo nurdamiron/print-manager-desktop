@@ -10,6 +10,31 @@ const store = new Store();
 
 // Определяем переменную для хранения главного окна
 let mainWindow: BrowserWindow | null = null;
+interface UsbDevice {
+  open: () => void;
+  close: () => void;
+  interfaces: {
+    find: (predicate: (iface: UsbInterface) => boolean) => UsbInterface | undefined;
+    [index: number]: UsbInterface;
+  }
+}
+
+
+interface UsbInterface {
+  descriptor: {
+    bInterfaceClass: number;
+  };
+  claim: () => void;
+  release: (callback: () => void) => void;
+  endpoints: UsbEndpoint[];
+}
+  
+interface UsbEndpoint {
+  descriptor: {
+    bEndpointAddress: number;
+  };
+  transfer: (data: Buffer, callback: (error?: Error) => void) => void;
+}
 
 /**
  * Создает главное окно приложения
@@ -100,71 +125,76 @@ ipcMain.handle('get-usb-printers', async () => {
   // Обработчик для печати на USB-принтер
   ipcMain.handle('print-to-usb', async (_, { printerId, filePath, copies = 1 }) => {
     try {
-      const [vendorId, productId] = printerId.split(':').map(id => parseInt(id, 16));
+      const [vendorId, productId] = printerId.split(':').map((id: string) => parseInt(id, 16));
       const device = usb.findByIds(vendorId, productId);
       
       if (!device) {
         throw new Error('USB printer not found');
       }
       
-      // Чтение файла
+      // Read file data
       const fileData = fs.readFileSync(filePath);
       
-      // Повторяем для количества копий
+      // Repeat for the number of copies
       for (let i = 0; i < copies; i++) {
         await sendDataToUsbPrinter(device, fileData);
       }
       
       return { success: true, message: 'Документ успешно отправлен на печать' };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error printing to USB:', error);
-      return { success: false, message: `Ошибка печати: ${error.message}` };
+      return { 
+        success: false, 
+        message: `Ошибка печати: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}` 
+      };
     }
   });
-  
-  // Функция отправки данных на USB-принтер
-  async function sendDataToUsbPrinter(device, data) {
-    return new Promise((resolve, reject) => {
-      try {
-        device.open();
-        
-        // Находим нужный интерфейс
-        const iface = device.interfaces.find(iface => 
-          iface.descriptor.bInterfaceClass === 7
-        ) || device.interfaces[0];
-        
-        iface.claim();
-        
-        // Находим OUT endpoint для отправки данных
-        const outEndpoint = iface.endpoints.find(ep => 
-          (ep.descriptor.bEndpointAddress & usb.LIBUSB_ENDPOINT_OUT) !== 0
-        );
-        
-        if (!outEndpoint) {
-          iface.release(() => device.close());
-          reject(new Error('Printer output endpoint not found'));
-          return;
-        }
-        
-        // Отправляем данные
-        outEndpoint.transfer(data, (error) => {
-          if (error) {
-            reject(error);
-          } else {
-            resolve(true);
-          }
-          
-          // Освобождаем интерфейс и закрываем устройство
-          iface.release(() => device.close());
-        });
-      } catch (error) {
-        try { device.close(); } catch (e) { /* Игнорируем ошибки при закрытии */ }
-        reject(error);
-      }
-    });
-  }
+
 
   
+  // Функция отправки данных на USB-принтер
+async function sendDataToUsbPrinter(device: UsbDevice, data: Buffer): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    try {
+      device.open();
+      
+      // Find printer interface (class 7 is printer class)
+      const iface = device.interfaces.find((iface: UsbInterface) => 
+        iface.descriptor.bInterfaceClass === 7
+      ) || device.interfaces[0];
+      
+      iface.claim();
+      
+      // Find OUT endpoint for sending data (bit 7 clear means OUT endpoint)
+      const outEndpoint = iface.endpoints.find((ep: UsbEndpoint) => 
+        (ep.descriptor.bEndpointAddress & 0x80) === 0
+      );
+      
+      if (!outEndpoint) {
+        iface.release(() => device.close());
+        reject(new Error('Printer output endpoint not found'));
+        return;
+      }
+      
+      // Send data to printer
+      outEndpoint.transfer(data, (error?: Error) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(true);
+        }
+        
+        // Release interface and close device
+        iface.release(() => device.close());
+      });
+    } catch (error: unknown) {
+      try { device.close(); } catch (e) { /* Ignore errors on close */ }
+      reject(error);
+    }
+  });
+}
+
+
 ipcMain.handle('check-printer-connection', async (_, printerIP: string, printerPort: number) => {
   return new Promise((resolve) => {
     // Создаем TCP-соединение с принтером
