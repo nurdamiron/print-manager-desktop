@@ -16,14 +16,22 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "clean": "rimraf dist",
-    "postinstall": "electron-rebuild"
+    "postinstall": "electron-rebuild -f -w usb",
+    "rebuild": "electron-rebuild -f -w usb",
+    "package": "npm run clean && npm run build && npm run dist"
+
   },
  "build": {
     "appId": "com.yourcompany.usbprintmanager",
     "productName": "USB Print Manager",
     "directories": {
-      "output": "build"
+      "output": "releases"
     },
+
+    "asarUnpack": [
+      "node_modules/usb/**/*",
+      "**/node_modules/usb/**/*"
+    ],
     "files": [
       "dist/**/*",
       "node_modules/**/*",
@@ -31,20 +39,17 @@
     ],
     "extraResources": [
       {
-        "from": "src/renderer/index.html",
-        "to": "dist/renderer/index.html"
+        "from": "node_modules/usb/build/Release",
+        "to": "node_modules/usb/build/Release",
+        "filter": ["*.node"]
       }
     ],
     "win": {
-      "target": [
-        "portable" 
-      ],
-      "icon": "src/assets/icon.ico"
+      "target": ["portable", "nsis"], 
+      "icon": "src/assets/icon.png"
     },
     "mac": {
-      "target": [
-        "dmg"
-      ],
+      "target": ["dmg", "zip"], 
       "icon": "src/assets/icon.icns"
     },
     "linux": {
