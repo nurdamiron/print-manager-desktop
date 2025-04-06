@@ -1,0 +1,61 @@
+{
+  "name": "print-manager-desktop",
+  "version": "1.0.0",
+  "description": "Приложение для управления принтерами",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build:main": "tsc -p src/main/tsconfig.json",
+    "build:renderer": "tsc -p src/renderer/tsconfig.json",
+    "build": "tsc",
+    "start": "electron .",
+    "dev": "npm run build && electron .",
+    "watch": "tsc -w",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.yourcompany.printmanager",
+    "productName": "Print Manager",
+    "directories": {
+      "output": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "src/renderer/index.html",
+      "package.json"
+    ],
+    "win": {
+      "target": ["nsis"]
+    },
+    "mac": {
+      "target": ["dmg"]
+    },
+    "linux": {
+      "target": ["AppImage"]
+    }
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^18.15.11",
+    "@types/react": "^18.0.33",
+    "@types/react-dom": "^18.0.11",
+    "@types/uuid": "^9.0.1",
+    "electron": "^24.0.0",
+    "electron-builder": "^23.6.0",
+    "typescript": "^5.0.3"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.10.6",
+    "@emotion/styled": "^11.10.6",
+    "@mui/icons-material": "^5.11.16",
+    "@mui/material": "^5.11.16",
+    "axios": "^1.3.5",
+    "electron-store": "^8.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.10.0",
+    "uuid": "^9.0.0"
+  }
+}

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Менеджер Принтеров</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      background-color: #f5f5f5;
+    }
+    
+    #root {
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <!-- Скрипт для режима разработки -->
+  <script>
+    // Динамически создаем элемент script для загрузки JS-бандла
+    const script = document.createElement('script');
+    // Используем относительный путь, который будет работать и в режиме разработки, и в production
+    script.src = '../dist/renderer/index.js';
+    // Добавляем скрипт в документ
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>
