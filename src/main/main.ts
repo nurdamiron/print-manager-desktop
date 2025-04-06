@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as net from 'net';
 import Store from 'electron-store';
+import * as usb from 'usb';
 
 // Создание хранилища настроек
 const store = new Store();
@@ -70,6 +71,100 @@ app.on('activate', () => {
  * Обработчик IPC для проверки соединения с принтером
  * Пытается установить TCP-соединение с принтером по указанному IP и порту
  */
+
+
+// Добавьте обработчик для получения USB-принтеров
+ipcMain.handle('get-usb-printers', async () => {
+    try {
+      const devices = usb.getDeviceList();
+      // Фильтруем только принтеры (обычно класс 7)
+      return devices
+        .filter(device => 
+          device.deviceDescriptor.bDeviceClass === 7 || 
+          // Часто принтеры определяются по интерфейсам
+          device.configDescriptor?.interfaces.some(iface => 
+            iface.some(setting => setting.bInterfaceClass === 7)
+          )
+        )
+        .map(device => ({
+          id: `${device.deviceDescriptor.idVendor}:${device.deviceDescriptor.idProduct}`,
+          name: `USB Printer (${device.deviceDescriptor.idVendor.toString(16)}:${device.deviceDescriptor.idProduct.toString(16)})`,
+          isUsb: true
+        }));
+    } catch (error) {
+      console.error('Error getting USB printers:', error);
+      return [];
+    }
+  });
+  
+  // Обработчик для печати на USB-принтер
+  ipcMain.handle('print-to-usb', async (_, { printerId, filePath, copies = 1 }) => {
+    try {
+      const [vendorId, productId] = printerId.split(':').map(id => parseInt(id, 16));
+      const device = usb.findByIds(vendorId, productId);
+      
+      if (!device) {
+        throw new Error('USB printer not found');
+      }
+      
+      // Чтение файла
+      const fileData = fs.readFileSync(filePath);
+      
+      // Повторяем для количества копий
+      for (let i = 0; i < copies; i++) {
+        await sendDataToUsbPrinter(device, fileData);
+      }
+      
+      return { success: true, message: 'Документ успешно отправлен на печать' };
+    } catch (error) {
+      console.error('Error printing to USB:', error);
+      return { success: false, message: `Ошибка печати: ${error.message}` };
+    }
+  });
+  
+  // Функция отправки данных на USB-принтер
+  async function sendDataToUsbPrinter(device, data) {
+    return new Promise((resolve, reject) => {
+      try {
+        device.open();
+        
+        // Находим нужный интерфейс
+        const iface = device.interfaces.find(iface => 
+          iface.descriptor.bInterfaceClass === 7
+        ) || device.interfaces[0];
+        
+        iface.claim();
+        
+        // Находим OUT endpoint для отправки данных
+        const outEndpoint = iface.endpoints.find(ep => 
+          (ep.descriptor.bEndpointAddress & usb.LIBUSB_ENDPOINT_OUT) !== 0
+        );
+        
+        if (!outEndpoint) {
+          iface.release(() => device.close());
+          reject(new Error('Printer output endpoint not found'));
+          return;
+        }
+        
+        // Отправляем данные
+        outEndpoint.transfer(data, (error) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(true);
+          }
+          
+          // Освобождаем интерфейс и закрываем устройство
+          iface.release(() => device.close());
+        });
+      } catch (error) {
+        try { device.close(); } catch (e) { /* Игнорируем ошибки при закрытии */ }
+        reject(error);
+      }
+    });
+  }
+
+  
 ipcMain.handle('check-printer-connection', async (_, printerIP: string, printerPort: number) => {
   return new Promise((resolve) => {
     // Создаем TCP-соединение с принтером

@@ -14,6 +14,23 @@ if (!rootElement) {
 // Создаем корень React
 const root = ReactDOM.createRoot(rootElement);
 
+try {
+    root.render(
+      <React.StrictMode>
+        <HashRouter>
+          <App />
+        </HashRouter>
+      </React.StrictMode>
+    );
+  } catch (error) {
+    console.error('Ошибка при рендеринге:', error);
+    // Отобразите ошибку на экране
+    document.body.innerHTML = `<div style="color: red; padding: 20px;">
+      <h2>Произошла ошибка:</h2>
+      <pre>${error?.toString()}</pre>
+    </div>`;
+  }
+  
 // Рендерим приложение
 root.render(
   <React.StrictMode>

@@ -5,10 +5,15 @@
 /**
  * Тип для результата проверки соединения с принтером
  */
+
+import { UsbPrinter, UsbPrintResult } from './usbPrinters';
+
+
+
 export interface PrinterConnectionResult {
-    status: 'online' | 'offline';
-    message: string;
-  }
+  status: 'online' | 'offline';
+  message: string;
+}
   
   /**
    * Тип для результата отправки файла на принтер
@@ -60,9 +65,13 @@ export interface PrinterConnectionResult {
      */
     getPrinters: () => Promise<any[]>;
     
+    getUsbPrinters: () => Promise<UsbPrinter[]>;
+    printToUsb: (printerId: string, filePath: string, copies: number) => Promise<UsbPrintResult>;
     /**
      * Удаляет принтер
      * @param printerId Идентификатор принтера для удаления
      */
     deletePrinter: (printerId: string) => Promise<PrinterOperationResult>;
+
+    
   }

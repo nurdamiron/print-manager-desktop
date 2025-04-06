@@ -6,12 +6,16 @@
   "scripts": {
     "build:main": "tsc -p src/main/tsconfig.json",
     "build:renderer": "tsc -p src/renderer/tsconfig.json",
-    "build": "tsc",
+    "build:typescript": "tsc",
+    "build:webpack": "webpack --config webpack.config.js",
+    "build": "npm run clean && npm run build:webpack && npm run build:typescript",
     "start": "electron .",
-    "dev": "npm run build && electron .",
+    "dev": "npm run build && npm run start",
     "watch": "tsc -w",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "clean": "rimraf dist",
+    "postinstall": "electron-rebuild"
   },
   "build": {
     "appId": "com.yourcompany.printmanager",
@@ -26,13 +30,19 @@
       "package.json"
     ],
     "win": {
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "mac": {
-      "target": ["dmg"]
+      "target": [
+        "dmg"
+      ]
     },
     "linux": {
-      "target": ["AppImage"]
+      "target": [
+        "AppImage"
+      ]
     }
   },
   "author": "",
@@ -44,7 +54,13 @@
     "@types/uuid": "^9.0.1",
     "electron": "^24.0.0",
     "electron-builder": "^23.6.0",
-    "typescript": "^5.0.3"
+    "electron-rebuild": "^3.2.9",
+    "html-webpack-plugin": "^5.6.3",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.0.3",
+    "usb": "^2.15.0",
+    "webpack": "^5.98.0",
+    "webpack-cli": "^6.0.1"
   },
   "dependencies": {
     "@emotion/react": "^11.10.6",

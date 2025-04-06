@@ -43,6 +43,12 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
     getPrinters: () => {
         return electron_1.ipcRenderer.invoke('get-printers');
     },
+    getUsbPrinters: () => {
+        return electron_1.ipcRenderer.invoke('get-usb-printers');
+    },
+    printToUsb: (printerId, filePath, copies) => {
+        return electron_1.ipcRenderer.invoke('print-to-usb', { printerId, filePath, copies });
+    },
     /**
      * Удаляет принтер из локального хранилища
      * @param printerId Идентификатор принтера для удаления

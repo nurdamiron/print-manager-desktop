@@ -16,6 +16,17 @@ if (!rootElement) {
 }
 // Создаем корень React
 const root = client_1.default.createRoot(rootElement);
+try {
+    root.render((0, jsx_runtime_1.jsx)(react_1.default.StrictMode, { children: (0, jsx_runtime_1.jsx)(react_router_dom_1.HashRouter, { children: (0, jsx_runtime_1.jsx)(App_1.default, {}) }) }));
+}
+catch (error) {
+    console.error('Ошибка при рендеринге:', error);
+    // Отобразите ошибку на экране
+    document.body.innerHTML = `<div style="color: red; padding: 20px;">
+      <h2>Произошла ошибка:</h2>
+      <pre>${error?.toString()}</pre>
+    </div>`;
+}
 // Рендерим приложение
 root.render((0, jsx_runtime_1.jsx)(react_1.default.StrictMode, { children: (0, jsx_runtime_1.jsx)(react_router_dom_1.HashRouter, { children: (0, jsx_runtime_1.jsx)(App_1.default, {}) }) }));
 //# sourceMappingURL=index.js.map
