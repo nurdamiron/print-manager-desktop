@@ -1,17 +1,24 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as net from 'net';
 import Store from 'electron-store';
 import * as usb from 'usb';
 
-// Создание хранилища настроек
+/**
+ * Хранилище настроек приложения
+ * Используется для сохранения информации о принтерах и предпочтениях пользователя
+ */
 const store = new Store();
 
-// Определяем переменную для хранения главного окна
+/**
+ * Переменная для хранения главного окна приложения
+ */
 let mainWindow: BrowserWindow | null = null;
 
-
+/**
+ * Интерфейс для USB-устройства
+ * Определяет структуру USB-устройства для работы с библиотекой usb
+ */
 interface UsbDevice {
   open: () => void;
   close: () => void;
@@ -21,7 +28,10 @@ interface UsbDevice {
   };
 }
 
-
+/**
+ * Интерфейс для интерфейса USB-устройства
+ * Определяет методы и свойства интерфейса USB-устройства
+ */
 export interface UsbInterface {
   descriptor: {
     bInterfaceClass: number;
@@ -30,7 +40,11 @@ export interface UsbInterface {
   release: (callback: () => void) => void;
   endpoints: UsbEndpoint[];
 }
-  
+
+/**
+ * Интерфейс для конечной точки USB-устройства
+ * Определяет методы и свойства для работы с конечными точками USB-устройств
+ */
 export interface UsbEndpoint {
   descriptor: {
     bEndpointAddress: number;
@@ -51,12 +65,20 @@ function createWindow() {
       nodeIntegration: false, // Отключаем nodeIntegration по соображениям безопасности
       contextIsolation: true, // Включаем изоляцию контекста для безопасности
       preload: path.join(__dirname, 'preload.js') // Загружаем скрипт preload
-    }
+    },
+    // Улучшенные визуальные настройки
+    show: false, // Не показываем окно до полной загрузки
+    titleBarStyle: 'hiddenInset', // Более современный стиль заголовка (для macOS)
+    backgroundColor: '#f8f9fa', // Фоновый цвет окна
   });
 
   // Загружаем HTML-файл в окно
-  // В режиме разработки можно использовать URL локального сервера
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+
+  // Показываем окно, когда оно полностью загружено
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
+  });
 
   // Открываем инструменты разработчика в режиме разработки
   if (process.env.NODE_ENV === 'development') {
@@ -95,16 +117,14 @@ app.on('activate', () => {
 });
 
 /**
- * Обработчик IPC для проверки соединения с принтером
- * Пытается установить TCP-соединение с принтером по указанному IP и порту
+ * Обработчик для получения USB-принтеров
+ * Сканирует подключенные USB-устройства и возвращает список принтеров
  */
-
-
-// Добавьте обработчик для получения USB-принтеров
-// В main.ts
 ipcMain.handle('get-usb-printers', async () => {
   try {
+    // Получаем список всех подключенных USB-устройств
     const devices = usb.getDeviceList();
+    
     // Фильтруем только принтеры (обычно класс 7)
     return devices
       .filter(device => 
@@ -116,192 +136,122 @@ ipcMain.handle('get-usb-printers', async () => {
       .map(device => ({
         id: `${device.deviceDescriptor.idVendor}:${device.deviceDescriptor.idProduct}`,
         name: `USB Printer (${device.deviceDescriptor.idVendor.toString(16)}:${device.deviceDescriptor.idProduct.toString(16)})`,
-        isUsb: true
+        vendorId: device.deviceDescriptor.idVendor.toString(16),
+        productId: device.deviceDescriptor.idProduct.toString(16),
+        isUsb: true,
+        isConnected: true
       }));
   } catch (error) {
-    console.error('Error getting USB printers:', error);
+    console.error('Ошибка при получении USB-принтеров:', error);
     return [];
   }
 });
-  
-  // Обработчик для печати на USB-принтер
-  ipcMain.handle('print-to-usb', async (_, { printerId, filePath, copies = 1 }) => {
-    try {
-      const [vendorId, productId] = printerId.split(':').map((id: string) => parseInt(id, 16));
-      const device = usb.findByIds(vendorId, productId);
-      
-      if (!device) {
-        throw new Error('USB printer not found');
-      }
-      
-      // Read file data
-      const fileData = fs.readFileSync(filePath);
-      
-      // Repeat for the number of copies
-      for (let i = 0; i < copies; i++) {
-        await sendDataToUsbPrinter(device as unknown as UsbDevice, fileData);
-      }
-      
-      return { success: true, message: 'Документ успешно отправлен на печать' };
-    } catch (error: unknown) {
-      console.error('Error printing to USB:', error);
-      return { 
-        success: false, 
-        message: `Ошибка печати: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}` 
-      };
+
+/**
+ * Обработчик для печати на USB-принтер
+ * Отправляет файл на выбранный USB-принтер с указанным количеством копий
+ */
+ipcMain.handle('print-to-usb', async (_, { printerId, filePath, copies = 1 }) => {
+  try {
+    // Парсим ID принтера для получения vendorId и productId
+    const [vendorId, productId] = printerId.split(':').map((id: string) => parseInt(id, 16));
+    
+    // Находим устройство по vendorId и productId
+    const device = usb.findByIds(vendorId, productId);
+    
+    if (!device) {
+      throw new Error('USB принтер не найден. Проверьте подключение устройства.');
     }
-  });
-
-
-  
-  // Функция отправки данных на USB-принтер
-  async function sendDataToUsbPrinter(device: UsbDevice, data: Buffer): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      try {
-        device.open();
-        
-        // Handle case where interfaces might not exist
-        if (!device.interfaces) {
-          reject(new Error('No interfaces found on device'));
-          return;
-        }
-        
-        // Find printer interface (class 7 is printer class)
-        let iface: UsbInterface;
-        
-        if (Array.isArray(device.interfaces)) {
-          // If interfaces is an array (from usb library)
-          iface = device.interfaces.find((i: UsbInterface) => 
-            i.descriptor.bInterfaceClass === 7
-          ) || device.interfaces[0];
-        } else {
-          // If interfaces is an object with a find method (our expected structure)
-          iface = device.interfaces.find((i: UsbInterface) => 
-            i.descriptor.bInterfaceClass === 7
-          ) || device.interfaces[0];
-        }
-        
-        if (!iface) {
-          reject(new Error('Printer interface not found'));
-          return;
-        }
-        
-        iface.claim();
-        
-        // Find OUT endpoint for sending data (bit 7 clear means OUT endpoint)
-        const outEndpoint = iface.endpoints.find((ep: UsbEndpoint) => 
-          (ep.descriptor.bEndpointAddress & 0x80) === 0
-        );
-        
-        if (!outEndpoint) {
-          iface.release(() => device.close());
-          reject(new Error('Printer output endpoint not found'));
-          return;
-        }
-        
-        // Send data to printer
-        outEndpoint.transfer(data, (error?: Error) => {
-          if (error) {
-            reject(error);
-          } else {
-            resolve(true);
-          }
-          
-          // Release interface and close device
-          iface.release(() => device.close());
-        });
-      } catch (error: unknown) {
-        try { device.close(); } catch (e) { /* Ignore errors on close */ }
-        reject(error);
-      }
-    });
+    
+    // Читаем содержимое файла
+    const fileData = fs.readFileSync(filePath);
+    
+    // Печатаем указанное количество копий
+    for (let i = 0; i < copies; i++) {
+      await sendDataToUsbPrinter(device as unknown as UsbDevice, fileData);
+    }
+    
+    return { success: true, message: 'Документ успешно отправлен на печать' };
+  } catch (error: unknown) {
+    console.error('Ошибка при печати на USB-принтер:', error);
+    return { 
+      success: false, 
+      message: `Ошибка печати: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}` 
+    };
   }
-
-
-ipcMain.handle('check-printer-connection', async (_, printerIP: string, printerPort: number) => {
-  return new Promise((resolve) => {
-    // Создаем TCP-соединение с принтером
-    const socket = net.createConnection({
-      host: printerIP,
-      port: printerPort,
-      timeout: 3000 // Таймаут в миллисекундах
-    });
-
-    // Если соединение успешно установлено
-    socket.on('connect', () => {
-      socket.end();
-      resolve({ status: 'online', message: 'Соединение успешно установлено' });
-    });
-
-    // Если произошла ошибка соединения
-    socket.on('error', (err) => {
-      resolve({ status: 'offline', message: `Ошибка соединения: ${err.message}` });
-    });
-
-    // Если истек таймаут соединения
-    socket.on('timeout', () => {
-      socket.destroy();
-      resolve({ status: 'offline', message: 'Таймаут соединения' });
-    });
-  });
 });
 
 /**
- * Обработчик IPC для отправки файла на принтер
- * Отправляет содержимое файла на принтер через RAW-порт (обычно 9100)
+ * Функция отправки данных на USB-принтер
+ * Устанавливает соединение с USB-принтером и отправляет данные на печать
+ * 
+ * @param device USB-устройство
+ * @param data Данные для печати
+ * @returns Promise, который разрешается после завершения печати
  */
-ipcMain.handle('send-to-printer', async (_, filePath: string, printerIP: string, printerPort: number) => {
+async function sendDataToUsbPrinter(device: UsbDevice, data: Buffer): Promise<boolean> {
   return new Promise((resolve, reject) => {
     try {
-      // Проверяем существование файла
-      if (!fs.existsSync(filePath)) {
-        reject(new Error(`Файл не найден: ${filePath}`));
+      // Открываем устройство
+      device.open();
+      
+      // Проверяем наличие интерфейсов
+      if (!device.interfaces) {
+        reject(new Error('Интерфейсы не найдены на устройстве'));
         return;
       }
-
-      // Открываем файл для чтения
-      const fileStream = fs.createReadStream(filePath);
       
-      // Создаем TCP-соединение с принтером
-      const socket = net.createConnection({
-        host: printerIP,
-        port: printerPort,
-        timeout: 10000 // Увеличенный таймаут для больших файлов
-      });
-
-      // Обработка ошибок соединения
-      socket.on('error', (err) => {
-        reject(new Error(`Ошибка соединения с принтером: ${err.message}`));
-      });
-
-      // Обработка таймаута
-      socket.on('timeout', () => {
-        socket.destroy();
-        reject(new Error('Таймаут соединения с принтером'));
-      });
-
-      // Когда соединение установлено, отправляем содержимое файла
-      socket.on('connect', () => {
-        // Направляем поток файла в соединение с принтером
-        fileStream.pipe(socket);
+      // Находим интерфейс принтера (класс 7 - принтеры)
+      let iface: UsbInterface;
+      
+      if (Array.isArray(device.interfaces)) {
+        // Если интерфейсы представлены массивом
+        iface = device.interfaces.find((i: UsbInterface) => 
+          i.descriptor.bInterfaceClass === 7
+        ) || device.interfaces[0];
+      } else {
+        // Если интерфейсы представлены объектом с методом find
+        iface = device.interfaces.find((i: UsbInterface) => 
+          i.descriptor.bInterfaceClass === 7
+        ) || device.interfaces[0];
+      }
+      
+      if (!iface) {
+        reject(new Error('Интерфейс принтера не найден'));
+        return;
+      }
+      
+      // Захватываем интерфейс для взаимодействия
+      iface.claim();
+      
+      // Находим OUT endpoint для отправки данных (бит 7 сброшен для OUT endpoint)
+      const outEndpoint = iface.endpoints.find((ep: UsbEndpoint) => 
+        (ep.descriptor.bEndpointAddress & 0x80) === 0
+      );
+      
+      if (!outEndpoint) {
+        iface.release(() => device.close());
+        reject(new Error('Endpoint вывода принтера не найден'));
+        return;
+      }
+      
+      // Отправляем данные на принтер
+      outEndpoint.transfer(data, (error?: Error) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(true);
+        }
         
-        // Обработка завершения передачи
-        fileStream.on('end', () => {
-          socket.end(); // Закрываем соединение после отправки
-          resolve({ success: true, message: 'Файл успешно отправлен на принтер' });
-        });
-
-        // Обработка ошибок чтения файла
-        fileStream.on('error', (err) => {
-          socket.destroy();
-          reject(new Error(`Ошибка чтения файла: ${err.message}`));
-        });
+        // Освобождаем интерфейс и закрываем устройство
+        iface.release(() => device.close());
       });
-    } catch (err: any) {
-      reject(new Error(`Ошибка отправки файла: ${err.message}`));
+    } catch (error: unknown) {
+      try { device.close(); } catch (e) { /* Игнорируем ошибки при закрытии */ }
+      reject(error);
     }
   });
-});
+}
 
 /**
  * Обработчик IPC для выбора файла для печати

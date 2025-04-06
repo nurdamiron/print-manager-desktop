@@ -12,7 +12,8 @@ import {
 } from '@mui/material';
 import { 
   Print as PrintIcon, 
-  Settings as SettingsIcon 
+  Settings as SettingsIcon,
+  Usb as UsbIcon,
 } from '@mui/icons-material';
 import { Printer } from '../components/PrinterCard';
 
@@ -42,9 +43,27 @@ const Dashboard: React.FC = () => {
         setLoading(true);
         setError(null);
         
-        // Используем API из preload для получения списка принтеров
-        const printerList = await window.electronAPI.getPrinters();
-        setPrinters(printerList);
+        // Получаем список сохраненных принтеров
+        const savedPrinters = await window.electronAPI.getPrinters();
+        
+        // Получаем список подключенных USB-принтеров
+        const usbPrinters = await window.electronAPI.getUsbPrinters();
+        
+        // Обновляем статус подключения сохраненных принтеров
+        const updatedPrinters = savedPrinters.map(printer => {
+          // Проверяем, есть ли принтер в списке подключенных
+          const connectedPrinter = usbPrinters.find(
+            usbPrinter => usbPrinter.id === printer.id
+          );
+          
+          return {
+            ...printer,
+            // Используем isConnected для USB-принтеров, isOnline для сетевых
+            isConnected: !!connectedPrinter,
+          };
+        });
+        
+        setPrinters(updatedPrinters);
       } catch (err) {
         console.error('Ошибка загрузки принтеров:', err);
         setError('Не удалось загрузить список принтеров');
@@ -57,7 +76,8 @@ const Dashboard: React.FC = () => {
   }, []);
 
   // Расчет статистики по принтерам
-  const onlinePrinters = printers.filter(printer => printer.isOnline === true).length;
+  // Считаем принтер подключенным, если либо isConnected, либо isOnline равно true
+  const connectedPrinters = printers.filter(printer => printer.isConnected === true || printer.isOnline === true).length;
   const totalPrinters = printers.length;
 
   return (
@@ -72,7 +92,7 @@ const Dashboard: React.FC = () => {
         <Grid item xs={12} md={4}>
           <Paper elevation={1} sx={{ p: 2 }}>
             <Typography variant="h6" color="primary" gutterBottom>
-              Принтеры
+              USB-принтеры
             </Typography>
             
             {loading ? (
@@ -82,10 +102,10 @@ const Dashboard: React.FC = () => {
             ) : (
               <>
                 <Typography variant="h4">
-                  {onlinePrinters} / {totalPrinters}
+                  {connectedPrinters} / {totalPrinters}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  принтеров в сети
+                  принтеров подключено
                 </Typography>
               </>
             )}
@@ -109,13 +129,14 @@ const Dashboard: React.FC = () => {
                   Печать документа
                 </Typography>
                 <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 2 }}>
-                  Отправьте документ на печать
+                  Отправьте документ на USB-принтер
                 </Typography>
                 <Button 
                   variant="contained" 
                   color="primary" 
                   onClick={() => navigate('/print')}
                   disabled={totalPrinters === 0}
+                  startIcon={<UsbIcon />}
                 >
                   Начать печать
                 </Button>
@@ -134,12 +155,13 @@ const Dashboard: React.FC = () => {
                   Настройка принтеров
                 </Typography>
                 <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 2 }}>
-                  Добавьте и настройте принтеры
+                  Добавьте и настройте USB-принтеры
                 </Typography>
                 <Button 
                   variant="contained" 
                   color="primary" 
                   onClick={() => navigate('/printers')}
+                  startIcon={<SettingsIcon />}
                 >
                   Настройки
                 </Button>

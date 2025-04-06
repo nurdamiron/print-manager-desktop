@@ -101,23 +101,43 @@ export const usePrinter = () => {
     try {
       setError(null);
       
-      // Проверяем соединение через API Electron
-      const result = await window.electronAPI.checkPrinterConnection(
-        printer.ipAddress ?? '',  // добавляем проверку на undefined
-        printer.port ?? 0         // добавляем проверку на undefined
-      );
-      
-      // Обновляем данные принтера с результатом проверки
-      const updatedPrinter: Printer = {
-        ...printer,
-        isOnline: result.status === 'online',
-        lastChecked: new Date().toISOString(),
-      };
-      
-      // Сохраняем обновленные данные
-      await updatePrinter(updatedPrinter);
-      
-      return result;
+      // Проверяем, является ли принтер USB-принтером
+      if (printer.isUsb) {
+        // Для USB-принтеров получаем актуальный список подключенных устройств
+        const usbPrinters = await window.electronAPI.getUsbPrinters();
+        const isConnected = usbPrinters.some(p => p.id === printer.id);
+        
+        // Обновляем статус подключения принтера
+        const updatedPrinter: Printer = {
+          ...printer,
+          isConnected,
+          lastUsed: isConnected ? new Date().toISOString() : printer.lastUsed
+        };
+        
+        // Сохраняем обновленные данные
+        await updatePrinter(updatedPrinter);
+        
+        return { status: isConnected ? 'online' : 'offline', message: '' };
+      } else {
+        // Для сетевых принтеров используем проверку соединения
+        // Используем опциональную цепочку для обработки undefined
+        const result = await window.electronAPI.checkPrinterConnection(
+          printer.ipAddress ?? '',
+          printer.port ?? 0
+        );
+        
+        // Обновляем данные принтера с результатом проверки
+        const updatedPrinter: Printer = {
+          ...printer,
+          isOnline: result.status === 'online',
+          lastChecked: new Date().toISOString(),
+        };
+        
+        // Сохраняем обновленные данные
+        await updatePrinter(updatedPrinter);
+        
+        return result;
+      }
     } catch (err: any) {
       console.error('Ошибка при проверке соединения с принтером:', err);
       setError(err.message || 'Ошибка при проверке соединения с принтером');
