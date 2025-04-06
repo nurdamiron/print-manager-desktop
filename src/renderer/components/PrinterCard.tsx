@@ -14,7 +14,8 @@ import {
   DialogContentText,
   DialogTitle,
 } from '@mui/material';
-import { Print, Delete, CheckCircle, Error as ErrorIcon } from '@mui/icons-material';
+import { Print, Delete, CheckCircle, Error as ErrorIcon, Usb as UsbIcon } from '@mui/icons-material';
+
 
 /**
  * Интерфейс для типа принтера
@@ -22,10 +23,11 @@ import { Print, Delete, CheckCircle, Error as ErrorIcon } from '@mui/icons-mater
 export interface Printer {
   id: string;
   name: string;
-  ipAddress: string;
-  port: number;
+  ipAddress?: string;  // Опциональное для USB-принтеров
+  port?: number;       // Опциональное для USB-принтеров
   isOnline?: boolean;
   lastChecked?: string;
+  isUsb?: boolean;     // Флаг для определения типа принтера
 }
 
 /**
@@ -99,47 +101,67 @@ const PrinterCard: React.FC<PrinterCardProps> = ({
         <CardContent>
           {/* Название принтера */}
           <Typography variant="h6" component="div" gutterBottom>
-            {printer.name}
-          </Typography>
+    {printer.name}
+    {printer.isUsb && (
+      <Chip 
+        size="small"
+        label="USB" 
+        color="primary" 
+        sx={{ ml: 1, height: 20 }} 
+      />
+    )}
+  </Typography>
           
-          {/* Информация о подключении */}
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            IP: {printer.ipAddress}, Порт: {printer.port}
-          </Typography>
+          {/* Информация о подключении (только для сетевых принтеров) */}
+  {!printer.isUsb && (
+    <Typography variant="body2" color="text.secondary" gutterBottom>
+      IP: {printer.ipAddress}, Порт: {printer.port}
+    </Typography>
+  )}
           
           {/* Статус подключения */}
-          <Box sx={{ mt: 1, display: 'flex', alignItems: 'center' }}>
-            {printer.isOnline === undefined ? (
-              <Chip 
-                label="Статус неизвестен" 
-                variant="outlined" 
-                size="small" 
-                color="default" 
-              />
-            ) : printer.isOnline ? (
-              <Chip 
-                icon={<CheckCircle />} 
-                label="В сети" 
-                variant="outlined" 
-                size="small" 
-                color="success" 
-              />
-            ) : (
-              <Chip 
-                icon={<ErrorIcon />} 
-                label="Не в сети" 
-                variant="outlined" 
-                size="small" 
-                color="error" 
-              />
-            )}
+  <Box sx={{ mt: 1, display: 'flex', alignItems: 'center' }}>
+    {printer.isUsb ? (
+      <Chip 
+        icon={<UsbIcon />}
+        label="Подключен"
+        variant="outlined"
+        size="small"
+        color="success"
+      />
+    ) : (
+      printer.isOnline === undefined ? (
+        <Chip 
+          label="Статус неизвестен" 
+          variant="outlined" 
+          size="small" 
+          color="default" 
+        />
+      ) : printer.isOnline ? (
+        <Chip 
+          icon={<CheckCircle />} 
+          label="В сети" 
+          variant="outlined" 
+          size="small" 
+          color="success" 
+        />
+      ) : (
+        <Chip 
+          icon={<ErrorIcon />} 
+          label="Не в сети" 
+          variant="outlined" 
+          size="small" 
+          color="error" 
+        />
+      )
+    )}
             
-            {/* Время последней проверки */}
-            {printer.lastChecked && (
-              <Typography variant="caption" sx={{ ml: 1 }}>
-                Проверено: {new Date(printer.lastChecked).toLocaleString()}
-              </Typography>
-            )}
+            {/* Время последней проверки (только для сетевых принтеров) */}
+    {!printer.isUsb && printer.lastChecked && (
+      <Typography variant="caption" sx={{ ml: 1 }}>
+        Проверено: {new Date(printer.lastChecked).toLocaleString()}
+      </Typography>
+    )}
           </Box>
         </CardContent>
         

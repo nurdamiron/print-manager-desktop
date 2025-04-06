@@ -57,7 +57,9 @@ const PrinterSettings = () => {
     const handleCheckPrinter = async (printer) => {
         try {
             // Проверяем соединение через API Electron
-            const result = await window.electronAPI.checkPrinterConnection(printer.ipAddress, printer.port);
+            const result = await window.electronAPI.checkPrinterConnection(printer.ipAddress ?? '', // добавляем проверку на undefined
+            printer.port ?? 0 // добавляем проверку на undefined
+            );
             // Обновляем статус принтера в списке
             const updatedPrinters = printers.map(p => {
                 if (p.id === printer.id) {

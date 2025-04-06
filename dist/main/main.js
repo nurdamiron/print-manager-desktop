@@ -100,13 +100,13 @@ electron_1.app.on('activate', () => {
  * Пытается установить TCP-соединение с принтером по указанному IP и порту
  */
 // Добавьте обработчик для получения USB-принтеров
+// В main.ts
 electron_1.ipcMain.handle('get-usb-printers', async () => {
     try {
         const devices = usb.getDeviceList();
         // Фильтруем только принтеры (обычно класс 7)
         return devices
             .filter(device => device.deviceDescriptor.bDeviceClass === 7 ||
-            // Часто принтеры определяются по интерфейсам
             device.configDescriptor?.interfaces.some(iface => iface.some(setting => setting.bInterfaceClass === 7)))
             .map(device => ({
             id: `${device.deviceDescriptor.idVendor}:${device.deviceDescriptor.idProduct}`,
@@ -148,8 +148,25 @@ async function sendDataToUsbPrinter(device, data) {
     return new Promise((resolve, reject) => {
         try {
             device.open();
+            // Handle case where interfaces might not exist
+            if (!device.interfaces) {
+                reject(new Error('No interfaces found on device'));
+                return;
+            }
             // Find printer interface (class 7 is printer class)
-            const iface = device.interfaces.find((iface) => iface.descriptor.bInterfaceClass === 7) || device.interfaces[0];
+            let iface;
+            if (Array.isArray(device.interfaces)) {
+                // If interfaces is an array (from usb library)
+                iface = device.interfaces.find((i) => i.descriptor.bInterfaceClass === 7) || device.interfaces[0];
+            }
+            else {
+                // If interfaces is an object with a find method (our expected structure)
+                iface = device.interfaces.find((i) => i.descriptor.bInterfaceClass === 7) || device.interfaces[0];
+            }
+            if (!iface) {
+                reject(new Error('Printer interface not found'));
+                return;
+            }
             iface.claim();
             // Find OUT endpoint for sending data (bit 7 clear means OUT endpoint)
             const outEndpoint = iface.endpoints.find((ep) => (ep.descriptor.bEndpointAddress & 0x80) === 0);

@@ -83,12 +83,22 @@ const PrintPage: React.FC = () => {
         setLoading(true);
         setError(null);
         
-        // Используем API из preload для получения списка принтеров
-        const printerList = await window.electronAPI.getPrinters();
-        setPrinters(printerList);
+        // Используем API из preload для получения списка сетевых принтеров
+        const networkPrinterList = await window.electronAPI.getPrinters();
+        
+        // Получаем список USB-принтеров
+        const usbPrinterList = await window.electronAPI.getUsbPrinters();
+        
+        // Объединяем списки принтеров
+        const allPrinters = [
+          ...networkPrinterList,
+          ...usbPrinterList
+        ];
+        
+        setPrinters([...networkPrinterList, ...usbPrinterList]);
         
         // Если принтер передан в URL, но его нет в списке, сбрасываем выбор
-        if (printerIdFromUrl && !printerList.some((p: Printer) => p.id === printerIdFromUrl)) {
+        if (printerIdFromUrl && !allPrinters.some((p) => p.id === printerIdFromUrl)) {
           setSelectedPrinterId('');
         }
       } catch (err) {
@@ -171,13 +181,24 @@ const PrintPage: React.FC = () => {
     });
     
     try {
-      // Отправляем файл на принтер через API Electron
-      // В реальном приложении здесь можно учесть параметр copies
-      const result = await window.electronAPI.sendToPrinter(
-        selectedFile.path,
-        printer.ipAddress,
-        printer.port
-      );
+      let result; // Объявляем переменную до использования
+      
+      // Проверяем, является ли принтер USB-принтером
+      if (printer.isUsb) {
+        // Отправляем на USB-принтер
+        result = await window.electronAPI.printToUsb(
+          selectedPrinterId,
+          selectedFile.path,
+          copies
+        );
+      } else {
+        // Отправляем на сетевой принтер
+        result = await window.electronAPI.sendToPrinter(
+          selectedFile.path,
+          printer.ipAddress ?? '', // добавляем проверку на undefined
+          printer.port ?? 0 // добавляем проверку на undefined
+        );
+      }
       
       // Обновляем статус печати
       setPrintingStatus({
@@ -188,7 +209,7 @@ const PrintPage: React.FC = () => {
       
       // Сбрасываем выбранный файл после успешной печати
       setSelectedFile(null);
-    } catch (err: any) {
+    } catch (err: any) { // Указываем тип для ошибки
       console.error('Ошибка печати:', err);
       
       // Обновляем статус печати с ошибкой
@@ -247,14 +268,16 @@ const PrintPage: React.FC = () => {
                 disabled={loading || printers.length === 0}
               >
                 {printers.map((printer) => (
-                  <MenuItem 
-                    key={printer.id} 
-                    value={printer.id}
-                    disabled={printer.isOnline === false}
-                  >
-                    {printer.name} {printer.isOnline === false ? '(Не в сети)' : ''}
-                  </MenuItem>
-                ))}
+  <MenuItem 
+    key={printer.id} 
+    value={printer.id}
+  >
+    {printer.isUsb 
+      ? `${printer.name} (USB)` 
+      : `${printer.name} ${printer.isOnline === false ? '(Не в сети)' : ''}`
+    }
+  </MenuItem>
+))}
               </Select>
               {!loading && printers.length === 0 && (
                 <FormHelperText error>

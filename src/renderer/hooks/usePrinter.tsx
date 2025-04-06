@@ -103,8 +103,8 @@ export const usePrinter = () => {
       
       // Проверяем соединение через API Electron
       const result = await window.electronAPI.checkPrinterConnection(
-        printer.ipAddress,
-        printer.port
+        printer.ipAddress ?? '',  // добавляем проверку на undefined
+        printer.port ?? 0         // добавляем проверку на undefined
       );
       
       // Обновляем данные принтера с результатом проверки

@@ -8,7 +8,8 @@
     "build:renderer": "tsc -p src/renderer/tsconfig.json",
     "build:typescript": "tsc",
     "build:webpack": "webpack --config webpack.config.js",
-    "build": "npm run clean && npm run build:webpack && npm run build:typescript",
+    "copy-html": "node copy-html.js",
+    "build": "npm run clean && npm run build:webpack && npm run build:typescript && npm run copy-html",
     "start": "electron .",
     "dev": "npm run build && npm run start",
     "watch": "tsc -w",
@@ -17,7 +18,7 @@
     "clean": "rimraf dist",
     "postinstall": "electron-rebuild"
   },
-  "build": {
+ "build": {
     "appId": "com.yourcompany.printmanager",
     "productName": "Print Manager",
     "directories": {
@@ -26,8 +27,13 @@
     "files": [
       "dist/**/*",
       "node_modules/**/*",
-      "src/renderer/index.html",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "src/renderer/index.html",
+        "to": "dist/renderer/index.html"
+      }
     ],
     "win": {
       "target": [
@@ -52,6 +58,7 @@
     "@types/react": "^18.0.33",
     "@types/react-dom": "^18.0.11",
     "@types/uuid": "^9.0.1",
+    "copyfiles": "^2.4.1",
     "electron": "^24.0.0",
     "electron-builder": "^23.6.0",
     "electron-rebuild": "^3.2.9",
