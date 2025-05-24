@@ -1,7 +1,7 @@
 {
-  "name": "usb-print-manager",
+  "name": "aitu-print-manager",
   "version": "1.0.0",
-  "description": "Приложение для управления USB-принтерами",
+  "description": "AITU Print Manager - Приложение для управления принтерами",
   "main": "dist/main/main.js",
   "scripts": {
     "build:main": "tsc -p src/main/tsconfig.json",
@@ -22,8 +22,8 @@
 
   },
  "build": {
-    "appId": "com.yourcompany.usbprintmanager",
-    "productName": "USB Print Manager",
+    "appId": "kz.aitu.printmanager",
+    "productName": "AITU Print Manager",
     "directories": {
       "output": "releases"
     },

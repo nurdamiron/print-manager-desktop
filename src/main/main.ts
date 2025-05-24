@@ -3,6 +3,9 @@ import * as path from 'path';
 import * as fs from 'fs';
 import Store from 'electron-store';
 import * as usb from 'usb';
+import jobProcessor from '../services/jobProcessor';
+import api from '../services/api';
+import printerService from '../services/printer';
 
 /**
  * Хранилище настроек приложения
@@ -14,6 +17,9 @@ const store = new Store();
  * Переменная для хранения главного окна приложения
  */
 let mainWindow: BrowserWindow | null = null;
+
+// Делаем mainWindow доступным глобально для других модулей
+global.mainWindow = mainWindow;
 
 /**
  * Интерфейс для USB-устройства
@@ -78,6 +84,8 @@ function createWindow() {
   // Показываем окно, когда оно полностью загружено
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
+    // Обновляем глобальную ссылку
+    global.mainWindow = mainWindow;
   });
 
   // Открываем инструменты разработчика в режиме разработки
@@ -96,6 +104,16 @@ function createWindow() {
  */
 app.on('ready', () => {
   createWindow();
+  
+  // Инициализируем IPC handlers для job processor
+  jobProcessor.setupIpcHandlers();
+  
+  // Запускаем обработку заданий после аутентификации
+  api.checkAuth().then((authenticated) => {
+    if (authenticated) {
+      jobProcessor.start();
+    }
+  });
 });
 
 /**
@@ -103,6 +121,7 @@ app.on('ready', () => {
  */
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
+    jobProcessor.stop();
     app.quit();
   }
 });
@@ -276,6 +295,68 @@ ipcMain.handle('select-file', async () => {
   }
 
   return result.filePaths[0];
+});
+
+// Новые IPC handlers для работы с API
+ipcMain.handle('api-login', async (_, email: string, password: string) => {
+  try {
+    const result = await api.agentLogin(email, password);
+    jobProcessor.start(); // Запускаем обработку заданий после успешного входа
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+});
+
+ipcMain.handle('api-logout', async () => {
+  jobProcessor.stop();
+  api.logout();
+  return { success: true };
+});
+
+ipcMain.handle('api-check-auth', async () => {
+  return api.checkAuth();
+});
+
+ipcMain.handle('get-local-printers', async () => {
+  try {
+    const printers = await printerService.getPrinters();
+    return printers;
+  } catch (error) {
+    console.error('Failed to get local printers:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('sync-printer-with-backend', async (_, localPrinter) => {
+  try {
+    const printer = await api.createPrinter({
+      name: localPrinter.name,
+      model: localPrinter.driver || 'Generic',
+      location: 'Local Desktop',
+      capabilities: {
+        color: true,
+        duplex: false,
+        paper_sizes: ['A4', 'Letter'],
+        max_resolution: '600x600',
+      },
+      price_per_page: 10,
+      price_color: 20,
+      status: 'ready',
+    });
+    return { success: true, printer };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+});
+
+ipcMain.handle('update-printer-status', async (_, printerId: number, status: string) => {
+  try {
+    await api.updatePrinterStatus(printerId, status);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
 });
 
 /**

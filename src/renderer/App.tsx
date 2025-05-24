@@ -1,5 +1,5 @@
-import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
 
@@ -9,6 +9,8 @@ import Dashboard from './pages/Dashboard';
 import PrinterSettings from './pages/PrinterSettings';
 import NewPrinter from './pages/NewPrinter';
 import PrintPage from './pages/PrintPage';
+import Login from '../pages/Login';
+import api from '../services/api';
 
 /**
  * Создаем тему оформления для Material UI
@@ -141,28 +143,57 @@ const theme = createTheme({
  * Отвечает за основные настройки темы и маршрутизацию
  */
 const App: React.FC = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    const authenticated = await api.checkAuth();
+    setIsAuthenticated(authenticated);
+  };
+
+  if (isAuthenticated === null) {
+    return <div>Loading...</div>;
+  }
+
   return (
     <ThemeProvider theme={theme}>
       {/* CssBaseline нормализует стили CSS */}
       <CssBaseline />
       
-      {/* Определяем базовую структуру приложения через шаблон Layout */}
-      <Layout>
-        {/* Настраиваем маршрутизацию между разными страницами приложения */}
+      {isAuthenticated ? (
+        <>
+          {/* Определяем базовую структуру приложения через шаблон Layout */}
+          <Layout onLogout={() => {
+            api.logout();
+            setIsAuthenticated(false);
+          }}>
+            {/* Настраиваем маршрутизацию между разными страницами приложения */}
+            <Routes>
+              {/* Главная страница - дашборд с общей информацией */}
+              <Route path="/" element={<Dashboard />} />
+              
+              {/* Страница настроек принтеров */}
+              <Route path="/printers" element={<PrinterSettings />} />
+              
+              {/* Страница добавления нового принтера */}
+              <Route path="/printers/new" element={<NewPrinter />} />
+              
+              {/* Страница печати документов */}
+              <Route path="/print" element={<PrintPage />} />
+              
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+          </Layout>
+        </>
+      ) : (
         <Routes>
-          {/* Главная страница - дашборд с общей информацией */}
-          <Route path="/" element={<Dashboard />} />
-          
-          {/* Страница настроек принтеров */}
-          <Route path="/printers" element={<PrinterSettings />} />
-          
-          {/* Страница добавления нового принтера */}
-          <Route path="/printers/new" element={<NewPrinter />} />
-          
-          {/* Страница печати документов */}
-          <Route path="/print" element={<PrintPage />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<Navigate to="/login" />} />
         </Routes>
-      </Layout>
+      )}
     </ThemeProvider>
   );
 };

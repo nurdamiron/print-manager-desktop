@@ -13,12 +13,14 @@ import {
   Toolbar,
   Typography,
   Divider,
+  Button,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
   Dashboard as DashboardIcon,
   Print as PrintIcon,
   Settings as SettingsIcon,
+  Logout as LogoutIcon,
 } from '@mui/icons-material';
 
 /**
@@ -26,14 +28,16 @@ import {
  */
 interface LayoutProps {
   children: React.ReactNode;
+  onLogout?: () => void;
 }
 
 /**
  * Компонент Layout - основной шаблон приложения
  * Включает боковую панель навигации и верхнюю панель
  * @param children Дочерние компоненты, которые будут отображены в области контента
+ * @param onLogout Функция выхода из системы
  */
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
   // Используем хуки для навигации и получения текущего пути
   const navigate = useNavigate();
   const location = useLocation();
@@ -102,9 +106,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </IconButton>
           
           {/* Заголовок текущей страницы */}
-          <Typography variant="h6" noWrap component="div">
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {getPageTitle()}
           </Typography>
+          
+          {/* Кнопка выхода */}
+          {onLogout && (
+            <Button
+              color="inherit"
+              startIcon={<LogoutIcon />}
+              onClick={onLogout}
+            >
+              Выход
+            </Button>
+          )}
         </Toolbar>
       </AppBar>
       
