@@ -235,7 +235,7 @@ class PrinterService {
         await execAsync(`cancel ${jobId}`);
       }
     } catch (error) {
-      throw new Error(`Failed to cancel job: ${error.message}`);
+      throw new Error(`Failed to cancel job: ${error instanceof Error ? error.message : 'Unknown error occurred'}`);
     }
   }
 }
