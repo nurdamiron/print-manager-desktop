@@ -361,31 +361,38 @@ class UniversalPrinterService {
       console.log('Could not check printer status:', error);
     }
 
-    // Method 1: Try PowerShell with specific printer
+    // Method 1: Direct print using Out-Printer (doesn't open external apps)
     try {
-      const psCommand = `powershell.exe -Command "Start-Process -FilePath '${filePath}' -Verb PrintTo -ArgumentList '${printerName}' -WindowStyle Hidden"`;
+      const psCommand = `powershell.exe -Command "Get-Content -Path '${filePath}' -Encoding Byte | Out-Printer -Name '${printerName}'"`;
       await execAsync(psCommand, { timeout: 30000 });
-      console.log('Printed successfully using PowerShell Start-Process with PrintTo');
+      console.log('Printed successfully using Out-Printer');
       
       // Wait a bit and check print queue
       await new Promise(resolve => setTimeout(resolve, 2000));
       await this.checkPrintQueue(printerName);
       return;
     } catch (error) {
-      console.log('PowerShell Start-Process with PrintTo failed:', error);
+      console.log('Out-Printer method failed:', error);
     }
 
-    // Method 2: Try PowerShell with shell execution (works for PDFs)
+    // Method 2: Use copy command to send file directly to printer port (if available)
     try {
-      const psCommand = `powershell.exe -Command "& {$printer = '${printerName}'; $file = '${filePath}'; if (Test-Path $file) { Start-Process -FilePath $file -Verb PrintTo -ArgumentList $printer -Wait -WindowStyle Hidden } }"`;
-      await execAsync(psCommand, { timeout: 30000 });
-      console.log('Printed successfully using PowerShell shell execution');
+      // First try to get the printer port
+      const portCommand = `powershell.exe -Command "(Get-WmiObject -Query \"SELECT * FROM Win32_Printer WHERE Name='${printerName.replace(/'/g, "''")}'\" ).PortName"`;
+      const { stdout: port } = await execAsync(portCommand, { timeout: 5000 });
+      const printerPort = port.trim();
       
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      await this.checkPrintQueue(printerName);
-      return;
+      if (printerPort && (printerPort.includes('USB') || printerPort.includes('LPT'))) {
+        const copyCommand = `copy /b "${filePath}" "${printerPort}"`;
+        await execAsync(copyCommand, { timeout: 30000 });
+        console.log(`Printed successfully using copy to port ${printerPort}`);
+        
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await this.checkPrintQueue(printerName);
+        return;
+      }
     } catch (error) {
-      console.log('PowerShell shell execution failed:', error);
+      console.log('Copy to port method failed:', error);
     }
 
     // Method 3: Try traditional print command
@@ -401,30 +408,30 @@ class UniversalPrinterService {
       console.log('Print command failed:', error);
     }
 
-    // Method 4: Try direct Windows API call for PDF printing
+    // Method 4: Use lpr command if available (works without opening apps)
     try {
-      const psCommand = `powershell.exe -Command "& {Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\"winspool.drv\\", CharSet = CharSet.Auto)] public static extern bool SetDefaultPrinter(string printerName); }'; [Win32]::SetDefaultPrinter('${printerName}'); Start-Process -FilePath '${filePath}' -Verb Print -Wait }"`;
-      await execAsync(psCommand, { timeout: 30000 });
-      console.log('Printed successfully using Windows API call');
+      const lprCommand = `lpr -S localhost -P "${printerName}" "${filePath}"`;
+      await execAsync(lprCommand, { timeout: 30000 });
+      console.log('Printed successfully using lpr command');
       
       await new Promise(resolve => setTimeout(resolve, 2000));
       await this.checkPrintQueue(printerName);
       return;
     } catch (error) {
-      console.log('Windows API call failed:', error);
+      console.log('LPR command failed:', error);
     }
 
-    // Method 5: Try PowerShell with different approach
+    // Method 5: Use PowerShell to send raw data to printer queue
     try {
-      const psCommand = `powershell.exe -Command "& {$ErrorActionPreference='Stop'; [System.Reflection.Assembly]::LoadWithPartialName('System.Drawing.Printing'); $doc = New-Object System.Drawing.Printing.PrintDocument; $doc.PrinterSettings.PrinterName = '${printerName}'; $doc.DocumentName = '${filePath}'; $doc.Print(); Write-Host 'Print job sent' }"`;
+      const psCommand = `powershell.exe -Command "$printer = Get-WmiObject -Query \"SELECT * FROM Win32_Printer WHERE Name='${printerName.replace(/'/g, "''")}'\"; if ($printer) { $bytes = [System.IO.File]::ReadAllBytes('${filePath}'); $printerPath = '\\\\' + $env:COMPUTERNAME + '\\' + $printer.ShareName; if (!$printer.ShareName) { $printerPath = $printer.Name }; [System.IO.File]::WriteAllBytes($printerPath, $bytes) }"`;
       await execAsync(psCommand, { timeout: 30000 });
-      console.log('Printed successfully using PowerShell PrintDocument');
+      console.log('Printed successfully using raw data to printer queue');
       
       await new Promise(resolve => setTimeout(resolve, 2000));
       await this.checkPrintQueue(printerName);
       return;
     } catch (error) {
-      console.log('PowerShell PrintDocument failed:', error);
+      console.log('Raw data to queue method failed:', error);
     }
 
     throw new Error(`Failed to print using any available method. Please ensure the printer "${printerName}" is properly installed and accessible.`);
@@ -659,6 +666,76 @@ class UniversalPrinterService {
     }
     
     return { isHP: true, model: 'HP Generic' };
+  }
+  
+  // Generic printer brand and model detection
+  public detectPrinterBrandAndModel(name: string, driver: string, vendorId?: string, productId?: string): { brand: string; model: string; vendorId?: string; productId?: string } {
+    const searchText = `${name} ${driver}`.toLowerCase();
+    
+    // EPSON printers
+    if (searchText.includes('epson') || vendorId === '04b8') {
+      // Try to extract model number
+      const modelPatterns = [
+        /l[\s-]?(\d{4})/i,  // L3100, L-3100, L 3100
+        /et[\s-]?(\d{4})/i, // ET-2720
+        /xp[\s-]?(\d{3,4})/i, // XP-440
+        /wf[\s-]?(\d{4})/i, // WF-3640
+        /expression[\s-]?(\w+)/i,
+        /workforce[\s-]?(\w+)/i,
+        /stylus[\s-]?(\w+)/i,
+      ];
+      
+      for (const pattern of modelPatterns) {
+        const match = searchText.match(pattern);
+        if (match) {
+          return { brand: 'EPSON', model: match[0].toUpperCase(), vendorId: '04b8', productId };
+        }
+      }
+      return { brand: 'EPSON', model: 'Generic', vendorId: '04b8', productId };
+    }
+    
+    // HP printers (already handled by isHPPrinter)
+    if (this.isHPPrinter(name, driver).isHP || vendorId === '03f0') {
+      const hpInfo = this.isHPPrinter(name, driver);
+      return { brand: 'HP', model: hpInfo.model || 'Generic', vendorId: '03f0', productId };
+    }
+    
+    // Canon printers
+    if (searchText.includes('canon') || vendorId === '04a9') {
+      const modelPatterns = [
+        /pixma[\s-]?(\w+)/i,
+        /imageclass[\s-]?(\w+)/i,
+        /selphy[\s-]?(\w+)/i,
+      ];
+      
+      for (const pattern of modelPatterns) {
+        const match = searchText.match(pattern);
+        if (match) {
+          return { brand: 'Canon', model: match[0].toUpperCase(), vendorId: '04a9', productId };
+        }
+      }
+      return { brand: 'Canon', model: 'Generic', vendorId: '04a9', productId };
+    }
+    
+    // Samsung printers
+    if (searchText.includes('samsung') || vendorId === '04e8') {
+      const modelPatterns = [
+        /scx[\s-]?(\w+)/i,
+        /clx[\s-]?(\w+)/i,
+        /ml[\s-]?(\w+)/i,
+      ];
+      
+      for (const pattern of modelPatterns) {
+        const match = searchText.match(pattern);
+        if (match) {
+          return { brand: 'Samsung', model: match[0].toUpperCase(), vendorId: '04e8', productId };
+        }
+      }
+      return { brand: 'Samsung', model: 'Generic', vendorId: '04e8', productId };
+    }
+    
+    // Default
+    return { brand: 'Unknown', model: 'Generic', vendorId, productId };
   }
   
   private getDefaultCapabilities(): PrinterCapabilities {

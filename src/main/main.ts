@@ -286,10 +286,22 @@ ipcMain.handle('print-to-usb', async (_, { printerId, filePath, copies = 1 }) =>
       const systemPrinters = await printerService.getPrinters();
       console.log('Found system printers:', systemPrinters.map(p => ({ name: p.name, driver: p.driver })));
       
-      // Универсальная система поиска принтеров
-      const printerBrandMapping: Record<string, { brand: string; keywords: string[] }> = {
+      // Enhanced printer mapping with model-specific matching
+      const printerBrandMapping: Record<string, { brand: string; keywords: string[]; models?: Record<string, string[]> }> = {
         '03f0': { brand: 'HP', keywords: ['hp', 'laserjet', 'deskjet', 'officejet', 'envy', 'photosmart'] },
-        '04b8': { brand: 'Epson', keywords: ['epson', 'expression', 'workforce', 'stylus'] },
+        '04b8': { 
+          brand: 'Epson', 
+          keywords: ['epson', 'expression', 'workforce', 'stylus'],
+          models: {
+            // Map product IDs to model names for better matching
+            '0001': ['l3100', 'l-3100', 'l 3100'],
+            '0002': ['l3110', 'l-3110', 'l 3110'],
+            '0003': ['l3150', 'l-3150', 'l 3150'],
+            '0004': ['l6190', 'l-6190', 'l 6190'],
+            '0005': ['l6170', 'l-6170', 'l 6170'],
+            // Add more as needed
+          }
+        },
         '04a9': { brand: 'Canon', keywords: ['canon', 'pixma', 'imageclass', 'selphy'] },
         '04e8': { brand: 'Samsung', keywords: ['samsung', 'scx', 'clx', 'ml'] },
         '0924': { brand: 'Xerox', keywords: ['xerox', 'phaser', 'workcentre'] },
@@ -306,33 +318,90 @@ ipcMain.handle('print-to-usb', async (_, { printerId, filePath, copies = 1 }) =>
       };
       
       const brandInfo = printerBrandMapping[vendorIdHex.toLowerCase()];
-      console.log(`Looking for ${brandInfo ? brandInfo.brand : 'Unknown'} printer (vendor: ${vendorIdHex})`);
+      console.log(`Looking for ${brandInfo ? brandInfo.brand : 'Unknown'} printer (vendor: ${vendorIdHex}, product: ${productIdHex})`);
       
       let systemPrinter = null;
       
-      // 1. Поиск по точному совпадению vendor ID в названии
+      // Get detailed printer info for all system printers
+      const printersWithDetails = systemPrinters.map(p => {
+        const details = printerService.detectPrinterBrandAndModel(p.name, p.driver, vendorIdHex, productIdHex);
+        return { ...p, details };
+      });
+      
+      // 1. First try to match by exact product ID in printer name
       if (!systemPrinter) {
-        systemPrinter = systemPrinters.find(p => 
-          p.name.toLowerCase().includes(vendorIdHex.toLowerCase()) ||
-          p.name.toLowerCase().includes(productIdHex.toLowerCase()) ||
-          p.name.toLowerCase().includes('usb')
-        );
-        if (systemPrinter) {
-          console.log('Found printer by vendor/product ID match:', systemPrinter.name);
+        const exactMatch = printersWithDetails.find(p => {
+          const pNameLower = p.name.toLowerCase();
+          return pNameLower.includes(vendorIdHex.toLowerCase()) ||
+                 pNameLower.includes(productIdHex.toLowerCase()) ||
+                 (pNameLower.includes('usb') && pNameLower.includes(productIdHex));
+        });
+        if (exactMatch) {
+          systemPrinter = systemPrinters.find(p => p.name === exactMatch.name);
+          console.log('Found printer by vendor/product ID match:', systemPrinter?.name);
         }
       }
       
-      // 2. Поиск по ключевым словам бренда (исключаем fax принтеры)
+      // 2. Try to match by specific model if we have model mapping
+      if (!systemPrinter && brandInfo && brandInfo.models) {
+        const modelKeywords = brandInfo.models[productIdHex.toLowerCase()];
+        if (modelKeywords) {
+          systemPrinter = systemPrinters.find(p => {
+            const pNameLower = p.name.toLowerCase();
+            const pDriverLower = p.driver.toLowerCase();
+            return modelKeywords.some((model: string) => 
+              pNameLower.includes(model) || pDriverLower.includes(model)
+            ) && !pNameLower.includes('fax');
+          });
+          if (systemPrinter) {
+            console.log(`Found ${brandInfo.brand} printer by model match:`, systemPrinter.name);
+          }
+        }
+      }
+      
+      // 3. Fallback to brand matching with model detection
       if (!systemPrinter && brandInfo) {
-        systemPrinter = systemPrinters.find(p => 
-          brandInfo.keywords.some((keyword: string) => 
-            (p.name.toLowerCase().includes(keyword) || 
-            p.driver.toLowerCase().includes(keyword)) &&
-            !p.name.toLowerCase().includes('fax')  // Исключаем fax принтеры
-          )
-        );
+        // Filter printers by brand
+        const brandPrinters = printersWithDetails.filter(p => {
+          return p.details.brand.toLowerCase() === brandInfo.brand.toLowerCase() &&
+                 !p.name.toLowerCase().includes('fax');
+        });
+        
+        console.log(`Found ${brandPrinters.length} ${brandInfo.brand} printers:`, 
+          brandPrinters.map(p => ({ name: p.name, model: p.details.model })));
+        
+        // If we have multiple brand matches, try to find the best match
+        if (brandPrinters.length > 1) {
+          // First, try to find one with matching product ID in the model
+          systemPrinter = brandPrinters.find(p => 
+            p.details.model.toLowerCase().includes(productIdHex.toLowerCase())
+          );
+          
+          // If no product ID match, look for model number patterns
+          if (!systemPrinter) {
+            // For EPSON, try to match L3100 vs L6190 style model numbers
+            if (brandInfo.brand === 'Epson') {
+              // Extract numeric parts from models and try to find closest match
+              const targetModel = brandPrinters.find(p => {
+                const modelMatch = p.name.match(/l[\s-]?(\d{4})/i);
+                if (modelMatch) {
+                  // Prefer lower model numbers (L3100 over L6190)
+                  return true;
+                }
+                return false;
+              });
+              systemPrinter = targetModel || brandPrinters[0];
+            } else {
+              systemPrinter = brandPrinters[0];
+            }
+          }
+        } else if (brandPrinters.length === 1) {
+          systemPrinter = brandPrinters[0];
+        }
+        
         if (systemPrinter) {
-          console.log(`Found ${brandInfo.brand} printer by brand keywords:`, systemPrinter.name);
+          systemPrinter = systemPrinters.find(p => p.name === systemPrinter!.name);
+          console.log(`Selected ${brandInfo.brand} printer:`, systemPrinter?.name);
         }
       }
       
