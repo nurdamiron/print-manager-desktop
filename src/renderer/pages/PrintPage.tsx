@@ -649,106 +649,335 @@ const PrintPage: React.FC = () => {
   ];
 
   return (
-    <Container maxWidth="md">
+    <Container maxWidth="lg" sx={{ py: 2 }}>
       <Box>
-        <Typography variant="h4" gutterBottom>
-          Печать документа
-        </Typography>
-        <Typography variant="body1" color="text.secondary" paragraph>
-          Выберите файл и USB-принтер для печати
-        </Typography>
+        {/* Заголовок */}
+        <Box sx={{ textAlign: 'center', mb: 4 }}>
+          <Typography 
+            variant="h3" 
+            gutterBottom
+            sx={{ 
+              fontWeight: 700,
+              color: 'white',
+              textShadow: '0px 2px 4px rgba(0, 0, 0, 0.3)',
+              mb: 2,
+            }}
+          >
+            Печать документа 🖨️
+          </Typography>
+          <Typography 
+            variant="h6" 
+            sx={{ 
+              color: 'rgba(255, 255, 255, 0.8)',
+              fontWeight: 400,
+              maxWidth: 600,
+              mx: 'auto',
+            }}
+          >
+            Следуйте простым шагам для печати ваших документов на USB-принтере
+          </Typography>
+        </Box>
 
-        <Divider sx={{ mb: 3 }} />
-
-        <Paper sx={{ p: 3, mb: 3 }}>
+        {/* Основной контент */}
+        <Box sx={{ 
+          background: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(20px)',
+          borderRadius: 4,
+          p: 4,
+          mb: 3,
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          boxShadow: '0px 20px 40px rgba(0, 0, 0, 0.1)',
+        }}>
           {/* Индикатор загрузки */}
           {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress />
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: 'column',
+              alignItems: 'center',
+              py: 8,
+            }}>
+              <CircularProgress size={48} sx={{ mb: 2 }} />
+              <Typography variant="h6" color="text.secondary">
+                Загрузка принтеров...
+              </Typography>
             </Box>
           ) : (
-            <Stepper activeStep={activeStep} orientation="vertical">
-              {steps.map((step, index) => (
-                <Step key={index}>
-                  <StepLabel>
-                    <Typography variant="h6">{step.label}</Typography>
-                  </StepLabel>
-                  <StepContent>
-                    {step.content}
-                  </StepContent>
-                </Step>
-              ))}
-            </Stepper>
+            <Box sx={{ position: 'relative' }}>
+              {/* Прогресс-бар */}
+              <Box sx={{ mb: 4 }}>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={(activeStep / (steps.length - 1)) * 100}
+                  sx={{
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 4,
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    },
+                  }}
+                />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                  {steps.map((step, index) => (
+                    <Typography 
+                      key={index}
+                      variant="caption" 
+                      color={index <= activeStep ? 'primary' : 'text.secondary'}
+                      fontWeight={index <= activeStep ? 600 : 400}
+                    >
+                      {step.label}
+                    </Typography>
+                  ))}
+                </Box>
+              </Box>
+
+              {/* Степпер */}
+              <Stepper 
+                activeStep={activeStep} 
+                orientation="vertical"
+                sx={{
+                  '& .MuiStepLabel-root': {
+                    py: 2,
+                  },
+                  '& .MuiStepIcon-root': {
+                    fontSize: '2rem',
+                    '&.Mui-active': {
+                      color: 'primary.main',
+                    },
+                    '&.Mui-completed': {
+                      color: 'success.main',
+                    },
+                  },
+                  '& .MuiStepContent-root': {
+                    borderLeft: 'none',
+                    ml: 4,
+                    pl: 3,
+                  },
+                }}
+              >
+                {steps.map((step, index) => (
+                  <Step key={index}>
+                    <StepLabel>
+                      <Typography variant="h5" fontWeight={600}>
+                        {step.label}
+                      </Typography>
+                    </StepLabel>
+                    <StepContent>
+                      <Box sx={{ 
+                        background: 'rgba(102, 126, 234, 0.02)',
+                        borderRadius: 3,
+                        p: 3,
+                        border: '1px solid rgba(102, 126, 234, 0.1)',
+                      }}>
+                        {step.content}
+                      </Box>
+                    </StepContent>
+                  </Step>
+                ))}
+              </Stepper>
+            </Box>
           )}
-        </Paper>
+        </Box>
 
         {/* Отображение ошибки (если есть) */}
         {error && (
-          <Alert severity="error" sx={{ mt: 2 }}>
-            {error}
-          </Alert>
+          <Fade in>
+            <Alert 
+              severity="error" 
+              sx={{ 
+                mb: 3,
+                borderRadius: 3,
+                background: 'rgba(255, 107, 107, 0.1)',
+                border: '1px solid rgba(255, 107, 107, 0.2)',
+                backdropFilter: 'blur(10px)',
+              }}
+            >
+              {error}
+            </Alert>
+          </Fade>
         )}
 
         {/* Отображение статуса печати */}
         {printingStatus.message && (
-          <Paper sx={{ mt: 2, overflow: 'hidden' }}>
-            <Alert 
-              severity={
-                printingStatus.isPrinting 
-                  ? 'info' 
-                  : (printingStatus.success ? 'success' : 'error')
-              }
-              icon={
-                printingStatus.isPrinting 
-                  ? <CircularProgress size={20} /> 
-                  : undefined
-              }
-              action={
-                !printingStatus.isPrinting && (
-                  <Button 
-                    color="inherit" 
-                    size="small" 
-                    onClick={handleCloseStatus}
-                  >
-                    {printingStatus.success ? 'Готово' : 'Закрыть'}
-                  </Button>
-                )
-              }
-            >
-              {printingStatus.message}
-            </Alert>
-            
-            {printingStatus.isPrinting && (
-              <LinearProgress 
-                variant="determinate" 
-                value={printingStatus.progress} 
-                sx={{ height: 8 }}
-              />
-            )}
-          </Paper>
+          <Fade in>
+            <Box sx={{ 
+              background: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(20px)',
+              borderRadius: 4,
+              overflow: 'hidden',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              boxShadow: '0px 10px 30px rgba(0, 0, 0, 0.1)',
+            }}>
+              <Alert 
+                severity={
+                  printingStatus.isPrinting 
+                    ? 'info' 
+                    : (printingStatus.success ? 'success' : 'error')
+                }
+                icon={
+                  printingStatus.isPrinting 
+                    ? <CircularProgress size={20} /> 
+                    : undefined
+                }
+                action={
+                  !printingStatus.isPrinting && (
+                    <Button 
+                      color="inherit" 
+                      size="large"
+                      onClick={handleCloseStatus}
+                      sx={{ 
+                        borderRadius: 2,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {printingStatus.success ? 'Готово ✓' : 'Закрыть'}
+                    </Button>
+                  )
+                }
+                sx={{
+                  fontSize: '1rem',
+                  alignItems: 'center',
+                  '& .MuiAlert-message': {
+                    fontSize: '1rem',
+                    fontWeight: 500,
+                  },
+                }}
+              >
+                {printingStatus.message}
+              </Alert>
+              
+              {printingStatus.isPrinting && (
+                <LinearProgress 
+                  variant="determinate" 
+                  value={printingStatus.progress} 
+                  sx={{ 
+                    height: 12,
+                    background: 'rgba(102, 126, 234, 0.1)',
+                    '& .MuiLinearProgress-bar': {
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    },
+                  }}
+                />
+              )}
+            </Box>
+          </Fade>
         )}
 
         {/* Диалог подтверждения печати */}
         <Dialog
           open={printDialogOpen}
           onClose={handleClosePrintDialog}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: 4,
+              background: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(20px)',
+            }
+          }}
         >
-          <DialogTitle>Подтверждение печати</DialogTitle>
-          <DialogContent>
-            <DialogContentText>
-              Вы собираетесь отправить файл "{selectedFile?.name}" на принтер "{getSelectedPrinter()?.name}" в количестве {copies} копий.
-              Продолжить?
-            </DialogContentText>
+          <DialogTitle sx={{ 
+            textAlign: 'center',
+            pt: 4,
+            pb: 2,
+          }}>
+            <Box sx={{ 
+              width: 80, 
+              height: 80, 
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mx: 'auto',
+              mb: 2,
+              boxShadow: '0px 8px 32px rgba(102, 126, 234, 0.3)',
+            }}>
+              <PrintIcon sx={{ fontSize: 36, color: 'white' }} />
+            </Box>
+            <Typography variant="h5" fontWeight={600}>
+              Подтверждение печати
+            </Typography>
+          </DialogTitle>
+          
+          <DialogContent sx={{ px: 4, pb: 2 }}>
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.6 }}>
+                Вы собираетесь отправить файл на печать
+              </Typography>
+              
+              <Box sx={{ 
+                background: 'rgba(102, 126, 234, 0.05)',
+                borderRadius: 3,
+                p: 3,
+                mb: 2,
+                border: '1px solid rgba(102, 126, 234, 0.1)',
+              }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <FileIcon color="primary" />
+                      <Box sx={{ textAlign: 'left' }}>
+                        <Typography variant="subtitle1" fontWeight={600}>
+                          {selectedFile?.name}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {selectedFile?.size && formatFileSize(selectedFile.size)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Grid>
+                  
+                  <Grid item xs={12}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <UsbIcon color="primary" />
+                      <Box sx={{ textAlign: 'left' }}>
+                        <Typography variant="subtitle1" fontWeight={600}>
+                          {getSelectedPrinter()?.name}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {copies} {copies === 1 ? 'копия' : 'копий'}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Box>
+              
+              <Typography variant="body2" color="text.secondary">
+                Убедитесь, что принтер подключен и готов к работе
+              </Typography>
+            </Box>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={handleClosePrintDialog} color="inherit">
+          
+          <DialogActions sx={{ px: 4, pb: 4, gap: 2 }}>
+            <Button 
+              onClick={handleClosePrintDialog} 
+              variant="outlined"
+              size="large"
+              sx={{ 
+                flex: 1,
+                py: 1.5,
+                borderRadius: 3,
+                borderWidth: 2,
+                '&:hover': { borderWidth: 2 }
+              }}
+            >
               Отмена
             </Button>
             <Button 
               onClick={handlePrint} 
-              color="primary" 
               variant="contained" 
+              size="large"
               startIcon={<PrintIcon />}
+              sx={{ 
+                flex: 1,
+                py: 1.5,
+                borderRadius: 3,
+                fontWeight: 600,
+              }}
             >
               Печатать
             </Button>

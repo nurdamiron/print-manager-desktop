@@ -19,15 +19,13 @@
     "postinstall": "electron-rebuild -f -w usb",
     "rebuild": "electron-rebuild -f -w usb",
     "package": "npm run clean && npm run build && npm run dist"
-
   },
- "build": {
+  "build": {
     "appId": "kz.aitu.printmanager",
     "productName": "AITU Print Manager",
     "directories": {
       "output": "releases"
     },
-
     "asarUnpack": [
       "node_modules/usb/**/*",
       "**/node_modules/usb/**/*"
@@ -41,15 +39,23 @@
       {
         "from": "node_modules/usb/build/Release",
         "to": "node_modules/usb/build/Release",
-        "filter": ["*.node"]
+        "filter": [
+          "*.node"
+        ]
       }
     ],
     "win": {
-      "target": ["portable", "nsis"], 
+      "target": [
+        "portable",
+        "nsis"
+      ],
       "icon": "src/assets/icon.png"
     },
     "mac": {
-      "target": ["dmg", "zip"], 
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "src/assets/icon.icns"
     },
     "linux": {
@@ -86,6 +92,7 @@
     "@emotion/styled": "^11.10.6",
     "@mui/icons-material": "^5.11.16",
     "@mui/material": "^5.11.16",
+    "axios": "^1.9.0",
     "electron-store": "^8.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

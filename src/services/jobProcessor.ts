@@ -33,7 +33,7 @@ export class JobProcessor {
   }
 
   private async processJobs(): Promise<void> {
-    if (this.isProcessing || !api.isAuthenticated()) {
+    if (this.isProcessing) {
       return;
     }
 

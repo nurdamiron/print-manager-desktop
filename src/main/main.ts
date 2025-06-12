@@ -108,12 +108,8 @@ app.on('ready', () => {
   // Инициализируем IPC handlers для job processor
   jobProcessor.setupIpcHandlers();
   
-  // Запускаем обработку заданий после аутентификации
-  api.checkAuth().then((authenticated) => {
-    if (authenticated) {
-      jobProcessor.start();
-    }
-  });
+  // Запускаем обработку заданий без аутентификации
+  jobProcessor.start();
 });
 
 /**
@@ -139,27 +135,98 @@ app.on('activate', () => {
  * Обработчик для получения USB-принтеров
  * Сканирует подключенные USB-устройства и возвращает список принтеров
  */
+/**
+ * Определяет бренд принтера по vendor ID
+ */
+function getPrinterBrandByVendorId(vendorId: number): string {
+  const vendorMapping: Record<number, string> = {
+    0x04b8: 'Epson',
+    0x03f0: 'HP',
+    0x04a9: 'Canon',
+    0x04e8: 'Samsung',
+    0x0924: 'Xerox',
+    0x0482: 'Kyocera',
+    0x067b: 'Prolific/Generic',
+    0x1a86: 'QinHeng/Generic',
+    0x0a5c: 'Broadcom',
+    0x0409: 'NEC',
+    0x054c: 'Sony',
+    0x0b05: 'ASUS',
+    0x1317: 'ADMtek',
+    0x0471: 'Philips',
+    0x0483: 'STMicroelectronics'
+  };
+  
+  return vendorMapping[vendorId] || 'Unknown';
+}
+
 ipcMain.handle('get-usb-printers', async () => {
   try {
     // Получаем список всех подключенных USB-устройств
     const devices = usb.getDeviceList();
     
-    // Фильтруем только принтеры (обычно класс 7)
-    return devices
-      .filter(device => 
-        device.deviceDescriptor.bDeviceClass === 7 || 
-        device.configDescriptor?.interfaces.some(iface => 
+    console.log('All USB devices found:', devices.length);
+    
+    // Фильтруем принтеры по нескольким критериям
+    const printers = devices.filter(device => {
+      // Проверяем класс устройства (7 = принтер)
+      if (device.deviceDescriptor.bDeviceClass === 7) {
+        return true;
+      }
+      
+      // Проверяем интерфейсы для принтеров
+      if (device.configDescriptor?.interfaces) {
+        const hasPrinterInterface = device.configDescriptor.interfaces.some(iface => 
           iface.some(setting => setting.bInterfaceClass === 7)
-        )
-      )
-      .map(device => ({
-        id: `${device.deviceDescriptor.idVendor}:${device.deviceDescriptor.idProduct}`,
-        name: `USB Printer (${device.deviceDescriptor.idVendor.toString(16)}:${device.deviceDescriptor.idProduct.toString(16)})`,
-        vendorId: device.deviceDescriptor.idVendor.toString(16),
-        productId: device.deviceDescriptor.idProduct.toString(16),
-        isUsb: true,
-        isConnected: true
-      }));
+        );
+        if (hasPrinterInterface) {
+          return true;
+        }
+      }
+      
+      // Проверяем известные производители принтеров с расширенным списком
+      const knownPrinterVendors = [
+        0x04b8, // Epson
+        0x03f0, // HP
+        0x04a9, // Canon
+        0x04e8, // Samsung
+        0x0924, // Xerox
+        0x0482, // Kyocera
+        0x067b, // Prolific (часто используется в принтерах)
+        0x1a86, // QinHeng (CH340/CH341 чипы)
+        0x0a5c, // Broadcom (некоторые принтеры)
+        0x0409, // NEC
+        0x054c, // Sony (принтеры)
+        0x0b05, // ASUSTek
+        0x1317, // ADMtek
+        0x0471, // Philips
+        0x0483, // STMicroelectronics
+        0x1d6b, // Linux Foundation (виртуальные USB хабы)
+        0x0b97, // O2 Micro (USB-to-parallel адаптеры)
+        0x1a40, // TERMINUS TECHNOLOGY (USB хабы для принтеров)
+      ];
+      
+      return knownPrinterVendors.includes(device.deviceDescriptor.idVendor);
+    });
+    
+    console.log('Filtered printers found:', printers.length);
+    
+    return printers
+      .map(device => {
+        const vendorIdHex = device.deviceDescriptor.idVendor.toString(16).padStart(4, '0');
+        const productIdHex = device.deviceDescriptor.idProduct.toString(16).padStart(4, '0');
+        const brand = getPrinterBrandByVendorId(device.deviceDescriptor.idVendor);
+        
+        return {
+          id: `${vendorIdHex}:${productIdHex}`,
+          name: `${brand} USB Printer (${vendorIdHex}:${productIdHex})`,
+          vendorId: vendorIdHex,
+          productId: productIdHex,
+          brand: brand,
+          isUsb: true,
+          isConnected: true
+        };
+      });
   } catch (error) {
     console.error('Ошибка при получении USB-принтеров:', error);
     return [];
@@ -171,16 +238,35 @@ ipcMain.handle('get-usb-printers', async () => {
  * Отправляет файл на выбранный USB-принтер с указанным количеством копий
  */
 ipcMain.handle('print-to-usb', async (_, { printerId, filePath, copies = 1 }) => {
+  console.log('Printing to USB printer:', { printerId, filePath, copies });
+  
+  // Парсим ID принтера для получения vendorId и productId
+  const [vendorIdHex, productIdHex] = printerId.split(':');
+  const vendorId = parseInt(vendorIdHex, 16);
+  const productId = parseInt(productIdHex, 16);
+  
+  console.log('Parsed IDs:', { vendorId, productId, vendorIdHex, productIdHex });
+  
   try {
-    // Парсим ID принтера для получения vendorId и productId
-    const [vendorId, productId] = printerId.split(':').map((id: string) => parseInt(id, 16));
+    
+    // Получаем список всех устройств для отладки
+    const allDevices = usb.getDeviceList();
+    console.log('All USB devices:', allDevices.map(d => ({
+      vendor: d.deviceDescriptor.idVendor,
+      product: d.deviceDescriptor.idProduct,
+      vendorHex: d.deviceDescriptor.idVendor.toString(16).padStart(4, '0'),
+      productHex: d.deviceDescriptor.idProduct.toString(16).padStart(4, '0'),
+      class: d.deviceDescriptor.bDeviceClass
+    })));
     
     // Находим устройство по vendorId и productId
     const device = usb.findByIds(vendorId, productId);
     
     if (!device) {
-      throw new Error('USB принтер не найден. Проверьте подключение устройства.');
+      throw new Error(`USB принтер не найден (${vendorIdHex}:${productIdHex}). Проверьте подключение устройства.`);
     }
+    
+    console.log('Found USB device:', device.deviceDescriptor);
     
     // Читаем содержимое файла
     const fileData = fs.readFileSync(filePath);
@@ -193,12 +279,111 @@ ipcMain.handle('print-to-usb', async (_, { printerId, filePath, copies = 1 }) =>
     return { success: true, message: 'Документ успешно отправлен на печать' };
   } catch (error: unknown) {
     console.error('Ошибка при печати на USB-принтер:', error);
+    
+    // Попробуем альтернативный метод через системные принтеры
+    try {
+      console.log('Trying fallback to system printer...');
+      const systemPrinters = await printerService.getPrinters();
+      console.log('Found system printers:', systemPrinters.map(p => ({ name: p.name, driver: p.driver })));
+      
+      // Универсальная система поиска принтеров
+      const printerBrandMapping: Record<string, { brand: string; keywords: string[] }> = {
+        '03f0': { brand: 'HP', keywords: ['hp', 'laserjet', 'deskjet', 'officejet', 'envy', 'photosmart'] },
+        '04b8': { brand: 'Epson', keywords: ['epson', 'expression', 'workforce', 'stylus'] },
+        '04a9': { brand: 'Canon', keywords: ['canon', 'pixma', 'imageclass', 'selphy'] },
+        '04e8': { brand: 'Samsung', keywords: ['samsung', 'scx', 'clx', 'ml'] },
+        '0924': { brand: 'Xerox', keywords: ['xerox', 'phaser', 'workcentre'] },
+        '0482': { brand: 'Kyocera', keywords: ['kyocera', 'ecosys', 'taskalfa'] },
+        '067b': { brand: 'Prolific', keywords: ['prolific', 'generic', 'usb'] },
+        '1a86': { brand: 'QinHeng', keywords: ['qinheng', 'ch340', 'ch341', 'generic'] },
+        '0a5c': { brand: 'Broadcom', keywords: ['broadcom'] },
+        '0409': { brand: 'NEC', keywords: ['nec'] },
+        '054c': { brand: 'Sony', keywords: ['sony'] },
+        '0b05': { brand: 'ASUS', keywords: ['asus'] },
+        '1317': { brand: 'ADMtek', keywords: ['admtek'] },
+        '0471': { brand: 'Philips', keywords: ['philips'] },
+        '0483': { brand: 'STMicroelectronics', keywords: ['stmicroelectronics', 'stm'] }
+      };
+      
+      const brandInfo = printerBrandMapping[vendorIdHex.toLowerCase()];
+      console.log(`Looking for ${brandInfo ? brandInfo.brand : 'Unknown'} printer (vendor: ${vendorIdHex})`);
+      
+      let systemPrinter = null;
+      
+      // 1. Поиск по точному совпадению vendor ID в названии
+      if (!systemPrinter) {
+        systemPrinter = systemPrinters.find(p => 
+          p.name.toLowerCase().includes(vendorIdHex.toLowerCase()) ||
+          p.name.toLowerCase().includes(productIdHex.toLowerCase()) ||
+          p.name.toLowerCase().includes('usb')
+        );
+        if (systemPrinter) {
+          console.log('Found printer by vendor/product ID match:', systemPrinter.name);
+        }
+      }
+      
+      // 2. Поиск по ключевым словам бренда (исключаем fax принтеры)
+      if (!systemPrinter && brandInfo) {
+        systemPrinter = systemPrinters.find(p => 
+          brandInfo.keywords.some((keyword: string) => 
+            (p.name.toLowerCase().includes(keyword) || 
+            p.driver.toLowerCase().includes(keyword)) &&
+            !p.name.toLowerCase().includes('fax')  // Исключаем fax принтеры
+          )
+        );
+        if (systemPrinter) {
+          console.log(`Found ${brandInfo.brand} printer by brand keywords:`, systemPrinter.name);
+        }
+      }
+      
+      // 3. Поиск первого доступного принтера (исключая виртуальные)
+      if (!systemPrinter) {
+        const virtualPrinters = ['fax', 'pdf', 'xps', 'onenote', 'print to', 'send to'];
+        systemPrinter = systemPrinters.find(p => 
+          !virtualPrinters.some(virtual => p.name.toLowerCase().includes(virtual))
+        );
+        if (systemPrinter) {
+          console.log('Using first available physical printer:', systemPrinter.name);
+        }
+      }
+      
+      if (systemPrinter) {
+        console.log(`Attempting to print via system printer: ${systemPrinter.name}`);
+        
+        try {
+          for (let i = 0; i < copies; i++) {
+            await printerService.printFile(systemPrinter.name, filePath, {
+              copies: 1,
+              color: false,
+              duplex: false,
+              paperSize: 'A4',
+              priority: false
+            });
+          }
+          
+          console.log(`Successfully printed ${copies} copy(ies) to ${systemPrinter.name}`);
+          return { 
+            success: true, 
+            message: `Документ отправлен на печать через системный принтер: ${systemPrinter.name}` 
+          };
+        } catch (printError) {
+          console.error(`Failed to print to ${systemPrinter.name}:`, printError);
+        }
+      } else {
+        console.log('No suitable system printer found');
+        console.log('Available printers:', systemPrinters.map(p => p.name));
+      }
+    } catch (fallbackError) {
+      console.error('Fallback printing failed:', fallbackError);
+    }
+    
     return { 
       success: false, 
       message: `Ошибка печати: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}` 
     };
   }
 });
+
 
 /**
  * Функция отправки данных на USB-принтер
@@ -211,14 +396,19 @@ ipcMain.handle('print-to-usb', async (_, { printerId, filePath, copies = 1 }) =>
 async function sendDataToUsbPrinter(device: UsbDevice, data: Buffer): Promise<boolean> {
   return new Promise((resolve, reject) => {
     try {
+      console.log('Opening USB device...');
       // Открываем устройство
       device.open();
       
       // Проверяем наличие интерфейсов
       if (!device.interfaces) {
+        console.error('No interfaces found on device');
         reject(new Error('Интерфейсы не найдены на устройстве'));
         return;
       }
+      
+      const interfaceCount = Array.isArray(device.interfaces) ? device.interfaces.length : Object.keys(device.interfaces || {}).length;
+      console.log('Device interfaces:', interfaceCount);
       
       // Находим интерфейс принтера (класс 7 - принтеры)
       let iface: UsbInterface;
@@ -236,12 +426,27 @@ async function sendDataToUsbPrinter(device: UsbDevice, data: Buffer): Promise<bo
       }
       
       if (!iface) {
+        console.error('Printer interface not found');
         reject(new Error('Интерфейс принтера не найден'));
         return;
       }
       
+      console.log('Found printer interface, claiming...');
+      
       // Захватываем интерфейс для взаимодействия
-      iface.claim();
+      try {
+        iface.claim();
+      } catch (claimError: unknown) {
+        console.error('Failed to claim interface:', claimError);
+        device.close();
+        
+        // If claiming fails, this is likely a driver or permission issue
+        // Try to use the interface without claiming (some printers work this way)
+        if (claimError instanceof Error && claimError.message.includes('LIBUSB_ERROR_NOT_SUPPORTED')) {
+          throw new Error('USB принтер не поддерживает прямое подключение. Убедитесь, что драйверы установлены правильно и принтер не используется другими приложениями.');
+        }
+        throw claimError;
+      }
       
       // Находим OUT endpoint для отправки данных (бит 7 сброшен для OUT endpoint)
       const outEndpoint = iface.endpoints.find((ep: UsbEndpoint) => 
@@ -249,16 +454,20 @@ async function sendDataToUsbPrinter(device: UsbDevice, data: Buffer): Promise<bo
       );
       
       if (!outEndpoint) {
+        console.error('Output endpoint not found');
         iface.release(() => device.close());
         reject(new Error('Endpoint вывода принтера не найден'));
         return;
       }
       
+      console.log('Found output endpoint, sending data...');
       // Отправляем данные на принтер
       outEndpoint.transfer(data, (error?: Error) => {
         if (error) {
+          console.error('Transfer error:', error);
           reject(error);
         } else {
+          console.log('Data sent successfully');
           resolve(true);
         }
         
@@ -297,26 +506,7 @@ ipcMain.handle('select-file', async () => {
   return result.filePaths[0];
 });
 
-// Новые IPC handlers для работы с API
-ipcMain.handle('api-login', async (_, email: string, password: string) => {
-  try {
-    const result = await api.agentLogin(email, password);
-    jobProcessor.start(); // Запускаем обработку заданий после успешного входа
-    return { success: true, ...result };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
-  }
-});
-
-ipcMain.handle('api-logout', async () => {
-  jobProcessor.stop();
-  api.logout();
-  return { success: true };
-});
-
-ipcMain.handle('api-check-auth', async () => {
-  return api.checkAuth();
-});
+// IPC handlers для работы с API без аутентификации
 
 ipcMain.handle('get-local-printers', async () => {
   try {

@@ -418,46 +418,180 @@ const NewPrinter: React.FC = () => {
   ];
 
   return (
-    <Container maxWidth="md">
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={() => navigate('/printers')}
-          sx={{ mr: 2 }}
-        >
-          Назад
-        </Button>
+    <Container maxWidth="lg" sx={{ py: 2 }}>
+      {/* Заголовок страницы */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        mb: 4,
+        flexWrap: 'wrap',
+        gap: 2,
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Button
+            startIcon={<ArrowBack />}
+            onClick={() => navigate('/printers')}
+            sx={{
+              background: 'rgba(255, 255, 255, 0.1)',
+              color: 'white',
+              backdropFilter: 'blur(10px)',
+              borderRadius: 3,
+              px: 3,
+              py: 1,
+              '&:hover': {
+                background: 'rgba(255, 255, 255, 0.2)',
+                transform: 'translateX(-2px)',
+              },
+            }}
+          >
+            Назад
+          </Button>
+          
+          <Box>
+            <Typography 
+              variant="h3" 
+              sx={{ 
+                fontWeight: 700,
+                color: 'white',
+                textShadow: '0px 2px 4px rgba(0, 0, 0, 0.3)',
+                mb: 1,
+              }}
+            >
+              Добавление принтеров 🔍
+            </Typography>
+            <Typography 
+              variant="h6" 
+              sx={{ 
+                color: 'rgba(255, 255, 255, 0.8)',
+                fontWeight: 400,
+              }}
+            >
+              Найдите и добавьте новые USB-принтеры в систему
+            </Typography>
+          </Box>
+        </Box>
         
-        <Typography variant="h4">
-          Добавление USB-принтеров
-        </Typography>
+        <Chip 
+          label={`Шаг ${activeStep + 1} из ${steps.length}`}
+          sx={{ 
+            bgcolor: 'rgba(255, 255, 255, 0.2)',
+            color: 'white',
+            fontWeight: 600,
+            fontSize: '0.875rem',
+          }}
+        />
       </Box>
 
-      <Divider sx={{ mb: 3 }} />
+      {/* Основной контент */}
+      <Box sx={{ 
+        background: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: 4,
+        p: 4,
+        mb: 3,
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        boxShadow: '0px 20px 40px rgba(0, 0, 0, 0.1)',
+      }}>
+        {/* Прогресс-бар */}
+        <Box sx={{ mb: 4 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+            {steps.map((step, index) => (
+              <Typography 
+                key={index}
+                variant="body2" 
+                color={index <= activeStep ? 'primary' : 'text.secondary'}
+                fontWeight={index <= activeStep ? 600 : 400}
+                sx={{ 
+                  flex: 1,
+                  textAlign: index === 0 ? 'left' : index === steps.length - 1 ? 'right' : 'center'
+                }}
+              >
+                {step.label}
+              </Typography>
+            ))}
+          </Box>
+          
+          <Box sx={{ 
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+            overflow: 'hidden',
+          }}>
+            <Box sx={{
+              height: '100%',
+              width: `${((activeStep + 1) / steps.length) * 100}%`,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              transition: 'width 0.5s ease-in-out',
+              borderRadius: 4,
+            }} />
+          </Box>
+        </Box>
 
-      <Paper sx={{ p: 3 }}>
-        <Stepper activeStep={activeStep} orientation="vertical">
+        <Stepper 
+          activeStep={activeStep} 
+          orientation="vertical"
+          sx={{
+            '& .MuiStepLabel-root': {
+              py: 2,
+            },
+            '& .MuiStepIcon-root': {
+              fontSize: '2rem',
+              '&.Mui-active': {
+                color: 'primary.main',
+              },
+              '&.Mui-completed': {
+                color: 'success.main',
+              },
+            },
+            '& .MuiStepContent-root': {
+              borderLeft: 'none',
+              ml: 4,
+              pl: 3,
+            },
+          }}
+        >
           {steps.map((step, index) => (
             <Step key={step.label}>
               <StepLabel>
-                <Typography variant="h6">{step.label}</Typography>
+                <Typography variant="h5" fontWeight={600}>
+                  {step.label}
+                </Typography>
               </StepLabel>
               <StepContent>
-                <Typography color="text.secondary" sx={{ mb: 2 }}>
+                <Typography color="text.secondary" sx={{ mb: 3, fontSize: '1rem' }}>
                   {step.description}
                 </Typography>
-                {step.content}
+                <Box sx={{ 
+                  background: 'rgba(102, 126, 234, 0.02)',
+                  borderRadius: 3,
+                  p: 3,
+                  border: '1px solid rgba(102, 126, 234, 0.1)',
+                }}>
+                  {step.content}
+                </Box>
               </StepContent>
             </Step>
           ))}
         </Stepper>
-      </Paper>
+      </Box>
 
       {/* Отображение ошибки (если есть) */}
       {error && (
-        <Alert severity="error" sx={{ mt: 2 }}>
-          {error}
-        </Alert>
+        <Fade in>
+          <Alert 
+            severity="error" 
+            sx={{ 
+              mb: 3,
+              borderRadius: 3,
+              background: 'rgba(255, 107, 107, 0.1)',
+              border: '1px solid rgba(255, 107, 107, 0.2)',
+              backdropFilter: 'blur(10px)',
+            }}
+          >
+            {error}
+          </Alert>
+        </Fade>
       )}
     </Container>
   );

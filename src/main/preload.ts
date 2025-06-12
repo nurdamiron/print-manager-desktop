@@ -56,8 +56,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   printToUsb: (printerId, filePath, copies) => {
     return ipcRenderer.invoke('print-to-usb', { printerId, filePath, copies });
   },
-
-  
   
   /**
    * Удаляет принтер из локального хранилища

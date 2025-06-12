@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
@@ -9,8 +9,6 @@ import Dashboard from './pages/Dashboard';
 import PrinterSettings from './pages/PrinterSettings';
 import NewPrinter from './pages/NewPrinter';
 import PrintPage from './pages/PrintPage';
-import Login from '../pages/Login';
-import api from '../services/api';
 
 /**
  * Создаем тему оформления для Material UI
@@ -21,38 +19,44 @@ import api from '../services/api';
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#4361ee', // Более яркий и современный синий цвет
-      light: '#738eef',
-      dark: '#2f42a9',
+      main: '#667eea', // Современный градиентный синий
+      light: '#8b9aed',
+      dark: '#4c63d2',
       contrastText: '#ffffff',
     },
     secondary: {
-      main: '#3a0ca3', // Фиолетовый для акцентов
-      light: '#5b30c9',
-      dark: '#2a077a',
+      main: '#764ba2', // Элегантный фиолетовый
+      light: '#9575cd',
+      dark: '#512da8',
       contrastText: '#ffffff',
     },
     success: {
-      main: '#4cc9f0', // Яркий голубой для успешных действий
-      light: '#7ad7f3',
-      dark: '#339ec0',
+      main: '#00d4aa', // Мятный зеленый
+      light: '#4ade80',
+      dark: '#059669',
     },
     error: {
-      main: '#f72585', // Яркий розовый для ошибок и предупреждений
-      light: '#f957a1',
-      dark: '#c71b6b',
+      main: '#ff6b6b', // Мягкий красный
+      light: '#fca5a5',
+      dark: '#dc2626',
+    },
+    warning: {
+      main: '#f093fb', // Розовый градиент
+      light: '#fbbf24',
+      dark: '#d97706',
     },
     background: {
-      default: '#f8f9fa', // Светлый фон для основного содержимого
-      paper: '#ffffff',   // Белый фон для карточек и панелей
+      default: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', // Градиентный фон
+      paper: '#ffffff',
     },
     text: {
-      primary: '#212529', // Тёмно-серый для основного текста
-      secondary: '#6c757d', // Серый для второстепенного текста
+      primary: '#1a202c',
+      secondary: '#718096',
     },
   },
   typography: {
     fontFamily: [
+      'Inter',
       '-apple-system',
       'BlinkMacSystemFont',
       '"Segoe UI"',
@@ -61,20 +65,56 @@ const theme = createTheme({
       'Arial',
       'sans-serif',
     ].join(','),
+    h1: {
+      fontWeight: 700,
+      fontSize: '2.5rem',
+      lineHeight: 1.2,
+      letterSpacing: '-0.03em',
+    },
+    h2: {
+      fontWeight: 700,
+      fontSize: '2rem',
+      lineHeight: 1.3,
+      letterSpacing: '-0.02em',
+    },
+    h3: {
+      fontWeight: 600,
+      fontSize: '1.75rem',
+      lineHeight: 1.3,
+      letterSpacing: '-0.02em',
+    },
     h4: {
-      fontWeight: 600, // Полужирный для заголовков
-      letterSpacing: '-0.02em', // Уменьшенный межбуквенный интервал
+      fontWeight: 600,
+      fontSize: '1.5rem',
+      lineHeight: 1.4,
+      letterSpacing: '-0.01em',
+    },
+    h5: {
+      fontWeight: 600,
+      fontSize: '1.25rem',
+      lineHeight: 1.4,
     },
     h6: {
-      fontWeight: 500, // Слегка утолщенный для подзаголовков
+      fontWeight: 600,
+      fontSize: '1.125rem',
+      lineHeight: 1.4,
+    },
+    body1: {
+      fontSize: '1rem',
+      lineHeight: 1.6,
+    },
+    body2: {
+      fontSize: '0.875rem',
+      lineHeight: 1.5,
     },
     button: {
-      textTransform: 'none', // Отключаем преобразование текста кнопок в заглавные
-      fontWeight: 500, // Утолщенный шрифт для кнопок
+      textTransform: 'none',
+      fontWeight: 600,
+      fontSize: '0.875rem',
     },
   },
   shape: {
-    borderRadius: 8, // Более закругленные углы для элементов
+    borderRadius: 16, // Более закругленные углы для современного вида
   },
   // Исправляем ошибку с массивом теней
   // Material UI ожидает массив из 25 элементов, заполняем все значения
@@ -109,13 +149,27 @@ const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          padding: '8px 16px', // Увеличенные отступы для кнопок
-          boxShadow: 'none', // Убираем тень для обычных кнопок
+          borderRadius: 12,
+          padding: '12px 24px',
+          fontSize: '0.875rem',
+          fontWeight: 600,
+          boxShadow: 'none',
+          transition: 'all 0.2s ease-in-out',
         },
         contained: {
-          boxShadow: '0px 3px 6px rgba(0, 0, 0, 0.1)', // Мягкая тень для contained кнопок
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          boxShadow: '0px 4px 15px rgba(102, 126, 234, 0.4)',
           '&:hover': {
-            boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.15)', // Тень при наведении
+            background: 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
+            boxShadow: '0px 6px 20px rgba(102, 126, 234, 0.6)',
+            transform: 'translateY(-2px)',
+          },
+        },
+        outlined: {
+          borderWidth: 2,
+          '&:hover': {
+            borderWidth: 2,
+            background: 'rgba(102, 126, 234, 0.04)',
           },
         },
       },
@@ -123,15 +177,64 @@ const theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          boxShadow: '0px 3px 8px rgba(0, 0, 0, 0.08)', // Мягкая тень для карточек
-          borderRadius: 12, // Более закругленные углы для карточек
+          borderRadius: 20,
+          boxShadow: '0px 10px 30px rgba(0, 0, 0, 0.1)',
+          backdropFilter: 'blur(20px)',
+          background: 'rgba(255, 255, 255, 0.9)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          transition: 'all 0.3s ease-in-out',
+          '&:hover': {
+            transform: 'translateY(-4px)',
+            boxShadow: '0px 20px 40px rgba(0, 0, 0, 0.15)',
+          },
         },
       },
     },
     MuiPaper: {
       styleOverrides: {
+        root: {
+          borderRadius: 20,
+          boxShadow: '0px 10px 30px rgba(0, 0, 0, 0.1)',
+          backdropFilter: 'blur(20px)',
+          background: 'rgba(255, 255, 255, 0.9)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+        },
         rounded: {
-          borderRadius: 12, // Согласованность углов с карточками
+          borderRadius: 20,
+        },
+      },
+    },
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          '& .MuiOutlinedInput-root': {
+            borderRadius: 12,
+            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+            transition: 'all 0.2s ease-in-out',
+            '&:hover': {
+              backgroundColor: 'rgba(255, 255, 255, 1)',
+            },
+            '&.Mui-focused': {
+              backgroundColor: 'rgba(255, 255, 255, 1)',
+              boxShadow: '0px 0px 0px 3px rgba(102, 126, 234, 0.1)',
+            },
+          },
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 20,
+          fontWeight: 500,
+        },
+      },
+    },
+    MuiAlert: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          boxShadow: '0px 4px 15px rgba(0, 0, 0, 0.1)',
         },
       },
     },
@@ -143,57 +246,30 @@ const theme = createTheme({
  * Отвечает за основные настройки темы и маршрутизацию
  */
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    const authenticated = await api.checkAuth();
-    setIsAuthenticated(authenticated);
-  };
-
-  if (isAuthenticated === null) {
-    return <div>Loading...</div>;
-  }
-
   return (
     <ThemeProvider theme={theme}>
       {/* CssBaseline нормализует стили CSS */}
       <CssBaseline />
       
-      {isAuthenticated ? (
-        <>
-          {/* Определяем базовую структуру приложения через шаблон Layout */}
-          <Layout onLogout={() => {
-            api.logout();
-            setIsAuthenticated(false);
-          }}>
-            {/* Настраиваем маршрутизацию между разными страницами приложения */}
-            <Routes>
-              {/* Главная страница - дашборд с общей информацией */}
-              <Route path="/" element={<Dashboard />} />
-              
-              {/* Страница настроек принтеров */}
-              <Route path="/printers" element={<PrinterSettings />} />
-              
-              {/* Страница добавления нового принтера */}
-              <Route path="/printers/new" element={<NewPrinter />} />
-              
-              {/* Страница печати документов */}
-              <Route path="/print" element={<PrintPage />} />
-              
-              <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
-          </Layout>
-        </>
-      ) : (
+      {/* Определяем базовую структуру приложения через шаблон Layout */}
+      <Layout>
+        {/* Настраиваем маршрутизацию между разными страницами приложения */}
         <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="*" element={<Navigate to="/login" />} />
+          {/* Главная страница - дашборд с общей информацией */}
+          <Route path="/" element={<Dashboard />} />
+          
+          {/* Страница настроек принтеров */}
+          <Route path="/printers" element={<PrinterSettings />} />
+          
+          {/* Страница добавления нового принтера */}
+          <Route path="/printers/new" element={<NewPrinter />} />
+          
+          {/* Страница печати документов */}
+          <Route path="/print" element={<PrintPage />} />
+          
+          <Route path="*" element={<Navigate to="/" />} />
         </Routes>
-      )}
+      </Layout>
     </ThemeProvider>
   );
 };

@@ -1,13 +1,48 @@
-import axios, { AxiosInstance } from 'axios';
-import Store from 'electron-store';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 
-const store = new Store();
+// Simple store replacement for browser environment
+class SimpleStore {
+  private data: { [key: string]: any } = {};
 
-export interface AgentCredentials {
-  email: string;
-  password: string;
-  token?: string;
+  get(key: string): any {
+    return this.data[key];
+  }
+
+  set(key: string, value: any): void {
+    this.data[key] = value;
+    // Save to localStorage if available
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(`electron-store-${key}`, JSON.stringify(value));
+    }
+  }
+
+  delete(key: string): void {
+    delete this.data[key];
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(`electron-store-${key}`);
+    }
+  }
+
+  constructor() {
+    // Load from localStorage if available
+    if (typeof localStorage !== 'undefined') {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('electron-store-')) {
+          const realKey = key.replace('electron-store-', '');
+          try {
+            this.data[realKey] = JSON.parse(localStorage.getItem(key) || '');
+          } catch (e) {
+            // Ignore parse errors
+          }
+        }
+      }
+    }
+  }
 }
+
+const store = new SimpleStore();
+
 
 export interface Printer {
   id: number;
@@ -54,10 +89,9 @@ export interface PrintJob {
 class ApiService {
   private api: AxiosInstance;
   private baseURL: string;
-  private agentToken: string | null = null;
 
   constructor() {
-    this.baseURL = process.env.API_URL || 'http://localhost:8080/api/v1';
+    this.baseURL = (typeof process !== 'undefined' && process.env?.API_URL) || 'http://localhost:8080/api/v1';
     this.api = axios.create({
       baseURL: this.baseURL,
       timeout: 30000,
@@ -65,79 +99,10 @@ class ApiService {
         'Content-Type': 'application/json',
       },
     });
-
-    // Load saved token
-    const savedToken = store.get('agentToken') as string;
-    if (savedToken) {
-      this.agentToken = savedToken;
-      this.api.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
-    }
-
-    // Request interceptor
-    this.api.interceptors.request.use(
-      (config) => {
-        if (this.agentToken) {
-          config.headers.Authorization = `Bearer ${this.agentToken}`;
-        }
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
-      }
-    );
-
-    // Response interceptor
-    this.api.interceptors.response.use(
-      (response) => response,
-      async (error) => {
-        if (error.response?.status === 401) {
-          // Token expired, try to refresh
-          this.agentToken = null;
-          store.delete('agentToken');
-          store.delete('agentCredentials');
-        }
-        return Promise.reject(error);
-      }
-    );
-  }
-
-  // Agent Authentication
-  async agentLogin(email: string, password: string): Promise<{ token: string; agent: any }> {
-    try {
-      const response = await this.api.post('/auth/agent/login', {
-        email,
-        password,
-      });
-
-      const { access_token, agent } = response.data;
-      this.agentToken = access_token;
-      this.api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-      
-      // Save credentials
-      store.set('agentToken', access_token);
-      store.set('agentCredentials', { email, password });
-
-      return { token: access_token, agent };
-    } catch (error) {
-      console.error('Agent login failed:', error);
-      throw error;
-    }
   }
 
   async checkAuth(): Promise<boolean> {
-    if (!this.agentToken) {
-      const credentials = store.get('agentCredentials') as AgentCredentials;
-      if (credentials?.email && credentials?.password) {
-        try {
-          await this.agentLogin(credentials.email, credentials.password);
-          return true;
-        } catch {
-          return false;
-        }
-      }
-      return false;
-    }
-    return true;
+    return true; // Always authenticated - no auth required
   }
 
   // Printer Management
@@ -163,26 +128,18 @@ class ApiService {
     await this.api.delete(`/printers/${id}`);
   }
 
-  // Job Management
+  // Job Management - skip agent jobs since no auth
   async getAgentJobs(status?: string): Promise<PrintJob[]> {
-    const params = status ? { status } : {};
-    const response = await this.api.get('/agent/jobs', { params });
-    return response.data.jobs;
+    return []; // Return empty array - no jobs without auth
   }
 
   async updateJobStatus(jobId: number, status: 'printing' | 'completed' | 'failed', message?: string): Promise<void> {
-    await this.api.put(`/agent/jobs/${jobId}/status`, {
-      status,
-      message,
-    });
+    // Skip - no auth
   }
 
   async downloadFile(fileUrl: string): Promise<ArrayBuffer> {
     const response = await axios.get(fileUrl, {
       responseType: 'arraybuffer',
-      headers: {
-        Authorization: `Bearer ${this.agentToken}`,
-      },
     });
     return response.data;
   }
@@ -199,16 +156,13 @@ class ApiService {
     }
   }
 
-  // Logout
+  // No auth needed
   logout(): void {
-    this.agentToken = null;
-    store.delete('agentToken');
-    store.delete('agentCredentials');
-    delete this.api.defaults.headers.common['Authorization'];
+    // No-op
   }
 
   isAuthenticated(): boolean {
-    return !!this.agentToken;
+    return true; // Always authenticated
   }
 }
 
